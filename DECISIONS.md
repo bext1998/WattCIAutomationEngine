@@ -8,4 +8,5 @@
 
 | 摘要 | 狀態 | 唯一權威來源 |
 |---|---|---|
-| 目前無需在此額外追蹤的決策；重大設計決策（架構選型、shell 預設值、env 策略等）已記錄於 spec.md §8.3、§9，該處即為唯一權威來源 | — | docs\spec.md §8.3、§9 |
+| spec.md v1.3 經 Maze 正式審查確認，狀態由 Draft 轉為 Review；§7 `[FROZEN]` 契約自此定案，修改需走 spec revision | 有效 | docs\spec.md 標頭、§7 |
+| 其餘重大設計決策（架構選型、shell 預設值、env 策略等）已記錄於 spec.md §8.3、§9，該處即為唯一權威來源 | — | docs\spec.md §8.3、§9 |

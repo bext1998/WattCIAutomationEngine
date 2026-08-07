@@ -11,7 +11,7 @@
 
 ## 文件
 
-- Spec：docs\spec.md（目前版本 v1.3，狀態 Draft，待 Maze 正式審查後轉 Review）
+- Spec：docs\spec.md（目前版本 v1.3，狀態 Review，Maze 已於 2026-08-08 確認）
 - Project Brief：PROJECT_BRIEF.md
 - Next Action：NEXT_ACTION.md
 - Decisions：DECISIONS.md
@@ -35,5 +35,6 @@
 
 ## 備注
 
-- spec.md 尚未經人類（Maze）正式審查；§7 標記 `[FROZEN]` 的契約在審查確認前不應視為最終定案。
+- spec.md 已於 2026-08-08 由 Maze 正式審查確認，狀態轉為 Review；§7 `[FROZEN]` 契約自此視為定案，修改需走 spec revision。
 - v1.1～v1.3 的修訂由 Claude Code 與 Codex 透過 herdr 互相審查完成，細節見 spec.md §15 修訂記錄。
+- GitHub Issues #1~#18 已依 v1.3 建立（Parent + 12 Child + 5 候選任務），見 https://github.com/bext1998/WattCIAutomationEngine/issues。

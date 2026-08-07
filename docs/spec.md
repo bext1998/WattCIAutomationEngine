@@ -1,7 +1,7 @@
 # Watt Specification — Phase 1 (MVP)
 
 **版本**：v1.3
-**狀態**：Draft（待 Maze 審查後轉 Review）
+**狀態**：Review（Maze 已於 2026-08-08 確認 v1.3 內容）
 **日期**：2026-08-08
 **適用對象**：實作 AI 代理（Codex / Claude Code / opencode / Cursor）、規格審查者
 **技術環境**：Go 1.24.x、static build、zero CGO、Windows-first（amd64）
