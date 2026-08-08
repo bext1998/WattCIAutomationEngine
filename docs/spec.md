@@ -365,6 +365,8 @@ Result 欄位在概念上分為兩類，此分類本身即為契約的一部分�
 | `EXIT_CANCELLED` | 4 | 收到中斷訊號，且無 active step，或 active step 的整棵 descendant process tree 已確認終止（見下方不變式） | 結果不具判定意義；不得視為失敗 |
 | `EXIT_INTERNAL_ERROR` | 5 | Watt 自身異常，包含但不限於：(a) cancellation cleanup 經重試仍無法確認 process tree 已全部終止、(b) result.json 寫入失敗、(c) 未預期的 panic 經 recover 攔截 | 回報 bug；不得視為驗證失敗 |
 
+CLI usage error（unknown command、unknown flag、參數數量錯）使用同值別名 `EXIT_USAGE`，回傳數值 2；其與 `EXIT_INVALID_PIPELINE` 同屬不可重試的輸入／設定錯誤，不新增 exit code。
+
 **不變式**：`EXIT_CANCELLED` 僅得在**無 active step，或 active step 的整棵 descendant process tree 於確認期限內確認終止**後回傳；此確認期限見 A-10（現訂為 5 秒，測量自 Watt 對 Job Object 發出終止訊號起算）。所有取消流程仍須完成 P-3 的清理要求；若逾此期限仍無法確認終止，先進入 internal error cleanup flow，完成安全清理（包括必要時啟用平台保證的 Job Object close-on-kill 機制）後才回傳 `EXIT_INTERNAL_ERROR`，不得在仍可能存在孤兒行程時退出。§4.2、AC-6 所稱之「5 秒」皆指同一個 A-10 期限，不另行定義。
 
 對 `watt check` 而言，靜態驗證成功回 `EXIT_SUCCESS`；驗證失敗回 `EXIT_INVALID_PIPELINE`。`watt check --env` 若額外偵測到必要 command 或 shell 缺失，回 `EXIT_ENVIRONMENT_UNAVAILABLE`。
