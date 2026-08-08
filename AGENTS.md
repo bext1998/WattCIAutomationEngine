@@ -67,6 +67,7 @@ cmd/watt → internal/orchestrator → internal/pipeline
 - 涉及 result 或 env 時，必須以 canary 驗證 `.watt/result.json` 全文不洩漏已知環境值，並檢查 `exit_code` nullability、partial steps、UTF-8 合法性及每個 stdout/stderr tail 的 8192-byte 上限。
 - 涉及 build 或發布產物時，驗證 `windows/amd64`、`CGO_ENABLED=0`、單一 `watt.exe`，且不依賴 Node.js、Python 或額外 runtime。
 - 不得宣稱未執行的檢查已通過。受環境限制無法驗證時，明確列出未驗證項目與風險；GitHub Actions 仍是最終權威驗證。
+- 若測試專用 TEMP Go module cache 因唯讀屬性無法清除，在確認該路徑確實為本次測試建立且不包含使用者既有資料後，可解除唯讀屬性再執行清理；不得修改其他路徑的權限或使用高風險系統級刪除操作。
 
 ## Git 與完成條件
 
