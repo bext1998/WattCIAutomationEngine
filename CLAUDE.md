@@ -16,6 +16,13 @@ Watt 是 Windows-first、local-first 的確定性 Pipeline 執行與驗證引擎
 3. `NEXT_ACTION.md` 是工作狀態權威；只有明確 closeout 才重建它。
 4. `docs\spec.md` §7 標記 `[FROZEN]` 的內容（Pipeline 資料模型、Result Schema、Exit Code Contract、Process 管理契約）不得自行增刪改，修改需走 spec revision 並取得使用者確認。
 
+## 遠端同步
+
+- 開始工作或準備交付前，先執行 `git status --short --branch` 並檢查相關 diff；需要同步時先 `git fetch origin`，確認目前分支與 upstream 的 ahead／behind 狀態。
+- 工作區乾淨且分支沒有分歧時，僅使用 `git pull --ff-only`；有未提交修改、分歧或 upstream 不明時，停止自動同步並回報，不得自行 stash、merge、rebase、reset 或覆寫檔案。
+- 同步後再次確認 `git status --short --branch` 與最新提交；遇到衝突或檢查失敗時保留現場並回報原因。
+- 未經使用者明確要求，不得 commit、push、merge、rebase、發布、部署或修改遠端 GitHub 資源；禁止 force push 至 `main`／`master`。
+
 ---
 
 ## 下一步
