@@ -70,6 +70,9 @@ cmd/watt → internal/orchestrator → internal/pipeline
 
 ## Git 與完成條件
 
+- 開始工作或準備交付前，先執行 `git status --short --branch` 並檢查相關 diff；需要與遠端同步時，先 `git fetch origin`，再確認目前分支與其 upstream 的 ahead／behind 狀態。
+- 工作區乾淨且目前分支與 upstream 沒有分歧時，僅使用 `git pull --ff-only` 同步；若有未提交修改、分支分歧或 upstream 不明，停止自動同步並回報，不得自行 stash、merge、rebase、reset 或覆寫檔案。
+- 同步後再次檢查 `git status --short --branch` 與最新提交；若同步引入衝突或檢查失敗，保留現場並回報原因，不以跳過檢查的方式繼續。
 - 未經使用者明確要求，不得 commit、push、merge、rebase、發布、部署或建立／修改 GitHub 資源。
 - 禁止 force push 至 `main`／`master`，禁止破壞性 Git 操作，禁止提交 token、密碼、API key 或其他敏感資料。
 - 只有使用者明確要求 closeout 時才重建 `NEXT_ACTION.md`；一般實作完成不得自行改寫工作前線文件。
