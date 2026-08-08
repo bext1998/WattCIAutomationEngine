@@ -1,7 +1,4 @@
 # Watt — Coding Agent 指令
-
-> 本文件供 Claude Code 在每個 session 開始時閱讀。
-
 ---
 
 ## 專案概述
