@@ -3,6 +3,9 @@ package main
 import (
 	"bytes"
 	"errors"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -29,27 +32,102 @@ func TestRootCommandVersionOutput(t *testing.T) {
 	}
 }
 
-func TestRootCommandRunAndCheckReportNotImplemented(t *testing.T) {
-	for _, name := range []string{"run", "check"} {
-		t.Run(name, func(t *testing.T) {
-			command := newRootCommand()
-			var stdout bytes.Buffer
-			var stderr bytes.Buffer
-			command.SetOut(&stdout)
-			command.SetErr(&stderr)
-			command.SetArgs([]string{name})
+func TestRootCommandRunReportsNotImplemented(t *testing.T) {
+	command := newRootCommand()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.SetOut(&stdout)
+	command.SetErr(&stderr)
+	command.SetArgs([]string{"run"})
 
-			if got, want := execute(command), EXIT_INTERNAL_ERROR; got != want {
-				t.Errorf("exit code = %d, want %d", got, want)
-			}
-			if got := stdout.String(); got != "" {
-				t.Errorf("stdout = %q, want empty", got)
-			}
-			if got, want := stderr.String(), name+" is not implemented\n"; got != want {
-				t.Errorf("stderr = %q, want %q", got, want)
-			}
-		})
+	if got, want := execute(command), EXIT_INTERNAL_ERROR; got != want {
+		t.Errorf("exit code = %d, want %d", got, want)
 	}
+	if got := stdout.String(); got != "" {
+		t.Errorf("stdout = %q, want empty", got)
+	}
+	if got, want := stderr.String(), "run is not implemented\n"; got != want {
+		t.Errorf("stderr = %q, want %q", got, want)
+	}
+}
+
+func TestCheck_NoSideEffects(t *testing.T) {
+	workdir := t.TempDir()
+	oldWorkingDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(oldWorkingDirectory); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+
+	resultDirectory := filepath.Join(workdir, ".watt")
+	if err := os.Mkdir(resultDirectory, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	resultPath := filepath.Join(resultDirectory, "result.json")
+	resultContents := []byte(`{"status":"existing"}`)
+	if err := os.WriteFile(resultPath, resultContents, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pipelineContents := []byte("version: 1\npipelines:\n  default:\n    steps:\n      - name: destructive\n        exec: cmd.exe\n        args:\n          - /c\n          - echo started>started.marker\n")
+	if err := os.WriteFile(filepath.Join(workdir, "watt.yaml"), pipelineContents, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	before := snapshotFiles(t, workdir)
+	command := newRootCommand()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.SetOut(&stdout)
+	command.SetErr(&stderr)
+	command.SetArgs([]string{"check"})
+
+	if got, want := execute(command), EXIT_SUCCESS; got != want {
+		t.Fatalf("exit code = %d, want %d; stderr = %q", got, want, stderr.String())
+	}
+	if got := stdout.String(); got != "" {
+		t.Errorf("stdout = %q, want empty", got)
+	}
+	if got := stderr.String(); got != "" {
+		t.Errorf("stderr = %q, want empty", got)
+	}
+
+	after := snapshotFiles(t, workdir)
+	if !reflect.DeepEqual(after, before) {
+		t.Errorf("check changed the filesystem: before=%v after=%v", before, after)
+	}
+}
+
+func snapshotFiles(t *testing.T, root string) map[string][]byte {
+	t.Helper()
+	snapshot := make(map[string][]byte)
+	if err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		relativePath, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		snapshot[relativePath] = contents
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return snapshot
 }
 
 func TestRootCommandUsageErrorsShareNonRetryableInputExitCode(t *testing.T) {
