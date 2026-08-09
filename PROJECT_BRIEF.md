@@ -1,7 +1,7 @@
 # Watt — 專案說明
 
 > 建立日期：2026-08-08
-> 最後更新：2026-08-08
+> 最後更新：2026-08-10
 
 ---
 
@@ -32,13 +32,13 @@ Watt 解決兩個相鄰但不同的問題：
 ## Coding Agent 工具
 
 - **主要工具**：Claude Code
-- **備用工具**：Codex（本次 spec 審查流程中透過 herdr 互相審查）
+- **協作工具**：Codex（參與 spec 審查、實作與 closeout 文件同步）；herdr 可協調多個 agent pane
 
 ---
 
 ## 相關文件
 
-- 規格書：docs\spec.md（v1.3，Draft，待 Maze 正式審查後轉 Review）
+- 規格書：docs\spec.md（v1.3，Review；Maze 已於 2026-08-08 確認）
 - 下一步：NEXT_ACTION.md
 - 決策紀錄：DECISIONS.md
 
@@ -50,4 +50,14 @@ Watt 解決兩個相鄰但不同的問題：
 - 不提供 Docker / VM / sandbox runner，不提供 filesystem 隔離；Watt 不宣稱任何 sandbox 能力（NG-4）。
 - Watt 對任何上層消費者（人類、coding agent、未來的 Taylor）皆無認知，整合方向恆為「消費者 → Watt」。
 - spec.md §7 標記 `[FROZEN]` 的介面契約（Pipeline 資料模型、Result Schema、Exit Code Contract、Process 管理契約）未經 spec revision 不得修改。
-- spec.md 內仍有兩處工程猜測值（R-8 遮罩最小長度門檻、A-10 cancellation 確認期限）尚待 Maze 確認是否合理，見 NEXT_ACTION.md。
+- spec.md §0 仍保留待確認的假設欄位；實作須以 v1.3 與 §7 `[FROZEN]` 契約為準，不得自行改寫 R-8 或 A-10 的既定語意。
+
+---
+
+## 目前實作基線
+
+- Issue #2 已完成：Go module、Cobra CLI 入口、Windows/amd64、`CGO_ENABLED=0` build 設定。
+- Issue #3 已完成：strict YAML decode、pipeline 資料模型與靜態驗證；`watt check` 只載入／驗證 `watt.yaml`，不啟動 step。
+- Issue #4 已完成：host → pipeline → step 的 env 合併（key 不分大小寫）與 step `cwd` 相對 repository root 解析。
+- Issue #6（Exec Step／`watt run`）尚未實作；Shell Step、Job Object／cancellation、result／redaction、`check --env` 仍是後續工作。
+- 目前沒有 `.github` workflow、GitHub Actions 執行紀錄或獨立 QA 報告；`cmd`、`pipeline`、`env` 已有針對性測試檔。
