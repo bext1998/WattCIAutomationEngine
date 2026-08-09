@@ -27,6 +27,13 @@ func TestEnvMerge_StepOverridesPipelineOverridesHost(t *testing.T) {
 			stepOverride:     map[string]string{},
 			want:             map[string]string{"HOST_ONLY": "host"},
 		},
+		{
+			name:             "case-insensitive override replaces host",
+			host:             map[string]string{"Path": "host"},
+			pipelineOverride: map[string]string{"PATH": "pipeline"},
+			stepOverride:     map[string]string{},
+			want:             map[string]string{"PATH": "pipeline"},
+		},
 	}
 
 	for _, test := range tests {
