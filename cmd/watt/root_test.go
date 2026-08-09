@@ -104,17 +104,71 @@ func TestCheck_NoSideEffects(t *testing.T) {
 	}
 }
 
-func snapshotFiles(t *testing.T, root string) map[string][]byte {
+func TestCheck_FailurePaths(t *testing.T) {
+	tests := []struct {
+		name     string
+		pipeline string
+	}{
+		{
+			name: "load failure",
+		},
+		{
+			name:     "validation failure",
+			pipeline: "version: 1\npipelines:\n  default:\n    steps:\n      - name: invalid\n",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			workdir := t.TempDir()
+			oldWorkingDirectory, err := os.Getwd()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chdir(workdir); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if err := os.Chdir(oldWorkingDirectory); err != nil {
+					t.Errorf("restore working directory: %v", err)
+				}
+			})
+
+			if test.pipeline != "" {
+				if err := os.WriteFile(filepath.Join(workdir, "watt.yaml"), []byte(test.pipeline), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			command := newRootCommand()
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			command.SetOut(&stdout)
+			command.SetErr(&stderr)
+			command.SetArgs([]string{"check"})
+
+			if got, want := execute(command), EXIT_INVALID_PIPELINE; got != want {
+				t.Errorf("exit code = %d, want %d", got, want)
+			}
+			if got := stdout.String(); got != "" {
+				t.Errorf("stdout = %q, want empty", got)
+			}
+			if got := stderr.String(); got == "" {
+				t.Error("stderr is empty, want an error message")
+			}
+		})
+	}
+}
+
+type snapshotEntry struct {
+	directory bool
+	contents  []byte
+}
+
+func snapshotFiles(t *testing.T, root string) map[string]snapshotEntry {
 	t.Helper()
-	snapshot := make(map[string][]byte)
+	snapshot := make(map[string]snapshotEntry)
 	if err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			return nil
-		}
-		contents, err := os.ReadFile(path)
 		if err != nil {
 			return err
 		}
@@ -122,7 +176,15 @@ func snapshotFiles(t *testing.T, root string) map[string][]byte {
 		if err != nil {
 			return err
 		}
-		snapshot[relativePath] = contents
+		if entry.IsDir() {
+			snapshot[relativePath] = snapshotEntry{directory: true}
+			return nil
+		}
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		snapshot[relativePath] = snapshotEntry{contents: contents}
 		return nil
 	}); err != nil {
 		t.Fatal(err)

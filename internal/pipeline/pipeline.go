@@ -12,6 +12,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const defaultShell = "pwsh"
+
 type PipelineFile struct {
 	Version   int                 `yaml:"version"`
 	Env       map[string]string   `yaml:"env"`
@@ -47,6 +49,9 @@ func Load(path string) (PipelineFile, error) {
 		}
 		return PipelineFile{}, fmt.Errorf("load pipeline %q: %w", path, err)
 	}
+	if isNullDocument(&document) {
+		return PipelineFile{}, fmt.Errorf("load pipeline %q: empty YAML document", path)
+	}
 
 	var extraDocument yaml.Node
 	if err := structureDecoder.Decode(&extraDocument); err != io.EOF {
@@ -69,6 +74,17 @@ func Load(path string) (PipelineFile, error) {
 
 	applyDefaults(&file)
 	return file, nil
+}
+
+func isNullDocument(document *yaml.Node) bool {
+	root := document
+	if root.Kind == yaml.DocumentNode {
+		if len(root.Content) == 0 {
+			return true
+		}
+		root = root.Content[0]
+	}
+	return root.Kind == yaml.ScalarNode && root.Tag == "!!null"
 }
 
 func validateVersionType(document *yaml.Node) error {
@@ -125,13 +141,14 @@ func (file PipelineFile) Validate() error {
 		seenStepNames := make(map[string]struct{}, len(pipeline.Steps))
 		for index, step := range pipeline.Steps {
 			stepNumber := index + 1
-			if strings.TrimSpace(step.Name) == "" {
+			stepName := strings.TrimSpace(step.Name)
+			if stepName == "" {
 				return fmt.Errorf("invalid pipeline %q step %d: name must not be blank", pipelineName, stepNumber)
 			}
-			if _, exists := seenStepNames[step.Name]; exists {
-				return fmt.Errorf("invalid pipeline %q step %d: duplicate step name %q", pipelineName, stepNumber, step.Name)
+			if _, exists := seenStepNames[stepName]; exists {
+				return fmt.Errorf("invalid pipeline %q step %d: duplicate step name %q", pipelineName, stepNumber, stepName)
 			}
-			seenStepNames[step.Name] = struct{}{}
+			seenStepNames[stepName] = struct{}{}
 
 			hasExec := strings.TrimSpace(step.Exec) != ""
 			hasRun := strings.TrimSpace(step.Run) != ""
@@ -149,14 +166,14 @@ func (file PipelineFile) Validate() error {
 			if hasRun {
 				shell := step.Shell
 				if shell == "" {
-					shell = "pwsh"
+					shell = defaultShell
 				}
 				switch shell {
-				case "pwsh", "cmd":
+				case defaultShell, "cmd":
 				case "bash":
 					return fmt.Errorf("invalid pipeline %q step %d %q: shell bash 尚未支援", pipelineName, stepNumber, step.Name)
 				default:
-					return fmt.Errorf("invalid pipeline %q step %d %q: unsupported shell %q; MVP supports pwsh and cmd", pipelineName, stepNumber, step.Name, shell)
+					return fmt.Errorf("invalid pipeline %q step %d %q: unsupported shell %q; MVP supports %s and cmd", pipelineName, stepNumber, step.Name, shell, defaultShell)
 				}
 			}
 		}
@@ -165,17 +182,12 @@ func (file PipelineFile) Validate() error {
 	return nil
 }
 
-// Validate applies the static validation contract to a pipeline value.
-func Validate(file PipelineFile) error {
-	return file.Validate()
-}
-
 func applyDefaults(file *PipelineFile) {
 	for pipelineName, definition := range file.Pipelines {
 		for index := range definition.Steps {
 			step := &definition.Steps[index]
 			if strings.TrimSpace(step.Run) != "" && step.Shell == "" {
-				step.Shell = "pwsh"
+				step.Shell = defaultShell
 			}
 		}
 		file.Pipelines[pipelineName] = definition

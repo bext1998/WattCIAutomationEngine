@@ -31,7 +31,7 @@ func TestValidate_DuplicateStepName(t *testing.T) {
 	file := validPipelineFile()
 	definition := file.Pipelines["default"]
 	definition.Steps = append(definition.Steps, Step{
-		Name: "build",
+		Name: " build",
 		Exec: "tool-two",
 	})
 	file.Pipelines["default"] = definition
@@ -145,6 +145,19 @@ func TestLoad_SyntaxError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "line") {
 		t.Errorf("Load() error = %q, want a line number", err)
+	}
+}
+
+func TestLoad_NullDocument(t *testing.T) {
+	for _, contents := range []string{"null\n", "~\n"} {
+		t.Run(strings.TrimSpace(contents), func(t *testing.T) {
+			path := writePipeline(t, contents)
+
+			_, err := Load(path)
+			if err == nil || !strings.Contains(err.Error(), "empty YAML document") {
+				t.Fatalf("Load() error = %v, want empty YAML document error", err)
+			}
+		})
 	}
 }
 

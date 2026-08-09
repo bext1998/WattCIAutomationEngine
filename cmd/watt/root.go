@@ -54,7 +54,7 @@ func newRootCommand() *cobra.Command {
 		RunE: func(_ *cobra.Command, _ []string) error {
 			repoRoot, err := os.Getwd()
 			if err != nil {
-				return &exitError{code: EXIT_INVALID_PIPELINE, err: fmt.Errorf("get repository root: %w", err)}
+				return &exitError{code: EXIT_INTERNAL_ERROR, err: fmt.Errorf("get repository root: %w", err)}
 			}
 
 			definition, err := pipeline.Load(filepath.Join(repoRoot, "watt.yaml"))
