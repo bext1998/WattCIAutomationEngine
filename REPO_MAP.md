@@ -95,7 +95,7 @@ internal/proc/           — 規劃中的 Windows Job Object 與 process tree �
 ## 測試
 
 - **測試檔案**：`cmd/watt/root_test.go`（CLI、`check` 無副作用／失敗路徑、usage error、help 與 `exitError`）；`internal/pipeline/pipeline_test.go`（載入與靜態驗證）；`internal/env/*_test.go`（env 合併與 cwd 解析）。
-- **執行測試**：`go test ./...`；本次 closeout 未新增執行 QA，repository 也沒有獨立 QA 報告或 GitHub Actions workflow。
+- **執行測試**：`go test ./...`；本次 closeout 未新增執行 QA，repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），但沒有獨立 QA 報告或 GitHub Actions 執行紀錄。
 
 ---
 
@@ -110,4 +110,4 @@ internal/proc/           — 規劃中的 Windows Job Object 與 process tree �
 
 - Issue #6（Exec Step／`watt run`）尚未開始，後續 #7、#8、#9 等執行期能力仍受其相依關係影響。
 - `watt.yaml` 尚未納入 repository；目前只能透過測試或外部工作目錄提供 pipeline 定義驗證 `watt check`。
-- repository 沒有 `.github` workflow、GitHub Actions 執行紀錄或獨立 QA 報告；目前 GitHub 的 #21～#23 PR 已合併，但沒有可引用的 CI／review rollup。
+- repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），但沒有 GitHub Actions 執行紀錄或獨立 QA 報告；目前 GitHub 的 #21～#23 PR 已合併，但沒有可引用的 CI／review rollup。
