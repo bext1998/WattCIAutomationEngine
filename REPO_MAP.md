@@ -2,7 +2,7 @@
 
 > 產出日期：2026-08-10
 > 工具：Codex（maze-repo-map）
-> 最後更新：2026-08-10（Issue #2～#4 / PR #21～#23 合併後）
+> 最後更新：2026-08-10（Issue #2～#4、#24 / PR #21～#23、#25 合併後）
 
 ---
 
@@ -30,6 +30,7 @@ WattCIAutomationEngine/
   REPO_MAP.md            — 本檔；repo 結構地圖
   go.mod / go.sum        — Go module 定義與依賴鎖定
   .gitignore             — 忽略 /dist/ 與 *.exe
+  .github/workflows/ci.yml — CI：push／PR／手動觸發，windows-latest 執行 go vet／go test／build／smoke test
   docs/spec.md           — Watt Phase 1 v1.3 功能、架構與驗收規格
   cmd/watt/              — CLI 入口（已實作骨架）
     main.go              — main／execute()：錯誤輸出與 exit code 對應
@@ -95,7 +96,7 @@ internal/proc/           — 規劃中的 Windows Job Object 與 process tree �
 ## 測試
 
 - **測試檔案**：`cmd/watt/root_test.go`（CLI、`check` 無副作用／失敗路徑、usage error、help 與 `exitError`）；`internal/pipeline/pipeline_test.go`（載入與靜態驗證）；`internal/env/*_test.go`（env 合併與 cwd 解析）。
-- **執行測試**：`go test ./...`；本次 closeout 未新增執行 QA，repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），但沒有獨立 QA 報告或 GitHub Actions 執行紀錄。
+- **執行測試**：`go test ./...`；本次 closeout 未新增執行 QA，repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），已在 PR #25 與 main push 各成功執行一次，但仍沒有獨立 QA 報告。
 
 ---
 
@@ -110,4 +111,4 @@ internal/proc/           — 規劃中的 Windows Job Object 與 process tree �
 
 - Issue #6（Exec Step／`watt run`）尚未開始，後續 #7、#8、#9 等執行期能力仍受其相依關係影響。
 - `watt.yaml` 尚未納入 repository；目前只能透過測試或外部工作目錄提供 pipeline 定義驗證 `watt check`。
-- repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），但沒有 GitHub Actions 執行紀錄或獨立 QA 報告；目前 GitHub 的 #21～#23 PR 已合併，但沒有可引用的 CI／review rollup。
+- repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），已在 PR #25 與 main push 各成功執行一次；仍沒有獨立 QA 報告。目前 GitHub 的 #21～#23、#25 PR 已合併，可引用 PR #25 的 CI 執行紀錄作為 rollup。

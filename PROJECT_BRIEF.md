@@ -60,4 +60,4 @@ Watt 解決兩個相鄰但不同的問題：
 - Issue #3 已完成：strict YAML decode、pipeline 資料模型與靜態驗證；`watt check` 只載入／驗證 `watt.yaml`，不啟動 step。
 - Issue #4 已完成：host → pipeline → step 的 env 合併（key 不分大小寫）與 step `cwd` 相對 repository root 解析。
 - Issue #6（Exec Step／`watt run`）尚未實作；Shell Step、Job Object／cancellation、result／redaction、`check --env` 仍是後續工作。
-- 目前已有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），但沒有 GitHub Actions 執行紀錄或獨立 QA 報告；`cmd`、`pipeline`、`env` 已有針對性測試檔。
+- Issue #24 已完成：新增 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），PR #25 已合併；CI 已在 PR 與 main push 各成功執行一次，但仍沒有獨立 QA 報告。`cmd`、`pipeline`、`env` 已有針對性測試檔。

@@ -4,7 +4,7 @@
 
 ## 目前狀態
 
-`in-progress`。Issue #3、#4 的前置能力已完成並關閉，Issue #6 是目前唯一已解除前置阻塞的 P0 核心工作；Parent Issue #1 仍開啟。
+`in-progress`。Issue #24（GitHub Actions CI workflow）已完成並關閉，PR #25 已合併；Issue #6 是目前唯一已解除前置阻塞的 P0 核心工作，尚未開始；Parent Issue #1 仍開啟。
 
 ## 下一個 Session 目標
 
@@ -19,11 +19,11 @@
 ## 阻塞與待決策
 
 - 阻塞：無；#6 的前置 #3、#4 已關閉。
-- 驗證缺口：repository 沒有 GitHub Actions workflow 或執行紀錄，也沒有 QA 報告；需依 `docs\spec.md` §13 逐項補驗。
+- 驗證缺口：repository 現有 `.github/workflows/ci.yml`，已在 PR #25 與 main push 各成功執行一次（go vet／go test／build／smoke test），但仍沒有針對 Issue #6 驗收條件的執行紀錄或 QA 報告；需依 `docs\spec.md` §13 逐項補驗。
 
 ## 權威連結
 
 - `docs\spec.md`（v1.3，Review）
 - [Issue #6](https://github.com/bext1998/WattCIAutomationEngine/issues/6)（目前下一個工作前線）
 - [Parent Issue #1](https://github.com/bext1998/WattCIAutomationEngine/issues/1)（追蹤全部 Sub-issue 進度，以 GitHub 為工作狀態權威）
-- [PR #23](https://github.com/bext1998/WattCIAutomationEngine/pull/23)（最近合併的 env/cwd 實作）
+- [PR #25](https://github.com/bext1998/WattCIAutomationEngine/pull/25)（最近合併：CI workflow）
