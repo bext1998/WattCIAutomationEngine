@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Setup Go
+        uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: go vet
+        shell: pwsh
+        run: go vet ./...
+
+      - name: go test
+        shell: pwsh
+        run: go test ./...
+
+      - name: Build watt.exe
+        shell: pwsh
+        run: .\scripts\build.ps1
+
+      - name: Smoke test binary
+        shell: pwsh
+        run: .\dist\watt.exe --version
