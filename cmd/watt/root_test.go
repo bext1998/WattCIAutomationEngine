@@ -104,6 +104,221 @@ func TestCheck_NoSideEffects(t *testing.T) {
 	}
 }
 
+func TestCheckEnv_DetectsMissingShell(t *testing.T) {
+	workdir := t.TempDir()
+	oldWorkingDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(oldWorkingDirectory); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+	t.Setenv("PATH", t.TempDir())
+
+	pipelineContents := []byte("version: 1\npipelines:\n  default:\n    steps:\n      - name: script\n        run: echo hello\n")
+	if err := os.WriteFile(filepath.Join(workdir, "watt.yaml"), pipelineContents, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	command := newRootCommand()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.SetOut(&stdout)
+	command.SetErr(&stderr)
+	command.SetArgs([]string{"check", "--env"})
+
+	if got, want := execute(command), EXIT_ENVIRONMENT_UNAVAILABLE; got != want {
+		t.Fatalf("exit code = %d, want %d; stderr = %q", got, want, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), `missing shell "pwsh"`) {
+		t.Errorf("stderr = %q, want missing pwsh shell", stderr.String())
+	}
+	if got := stdout.String(); got != "" {
+		t.Errorf("stdout = %q, want empty", got)
+	}
+}
+
+func TestCheckEnv_DetectsMissingCommand(t *testing.T) {
+	workdir := t.TempDir()
+	oldWorkingDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(oldWorkingDirectory); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+	t.Setenv("PATH", t.TempDir())
+
+	const missingCommand = "watt-check-missing-command"
+	pipelineContents := []byte("version: 1\npipelines:\n  default:\n    steps:\n      - name: command\n        exec: " + missingCommand + "\n")
+	if err := os.WriteFile(filepath.Join(workdir, "watt.yaml"), pipelineContents, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	command := newRootCommand()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.SetOut(&stdout)
+	command.SetErr(&stderr)
+	command.SetArgs([]string{"check", "--env"})
+
+	if got, want := execute(command), EXIT_ENVIRONMENT_UNAVAILABLE; got != want {
+		t.Fatalf("exit code = %d, want %d; stderr = %q", got, want, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), `missing command "`+missingCommand+`"`) {
+		t.Errorf("stderr = %q, want missing command %q", stderr.String(), missingCommand)
+	}
+	if got := stdout.String(); got != "" {
+		t.Errorf("stdout = %q, want empty", got)
+	}
+}
+
+func TestCheckEnv_ReportsMissingRequirementsInStableOrder(t *testing.T) {
+	workdir := t.TempDir()
+	oldWorkingDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(oldWorkingDirectory); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+	t.Setenv("PATH", t.TempDir())
+
+	pipelineContents := []byte("version: 1\npipelines:\n  zeta:\n    steps:\n      - name: later-command\n        exec: watt-check-missing-command-2\n  alpha:\n    steps:\n      - name: first-shell\n        run: echo hello\n      - name: first-command\n        exec: watt-check-missing-command\n      - name: duplicate-command\n        exec: watt-check-missing-command\n")
+	if err := os.WriteFile(filepath.Join(workdir, "watt.yaml"), pipelineContents, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	command := newRootCommand()
+	var stderr bytes.Buffer
+	command.SetErr(&stderr)
+	command.SetArgs([]string{"check", "--env"})
+
+	if got, want := execute(command), EXIT_ENVIRONMENT_UNAVAILABLE; got != want {
+		t.Fatalf("exit code = %d, want %d; stderr = %q", got, want, stderr.String())
+	}
+	want := `environment unavailable: missing shell "pwsh"; missing command "watt-check-missing-command"; missing command "watt-check-missing-command-2"` + "\n"
+	if got := stderr.String(); got != want {
+		t.Errorf("stderr = %q, want %q", got, want)
+	}
+}
+
+func TestCheckEnv_SucceedsForCmd(t *testing.T) {
+	workdir := t.TempDir()
+	oldWorkingDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(oldWorkingDirectory); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+	systemRoot := os.Getenv("SystemRoot")
+	if systemRoot == "" {
+		t.Fatal("SystemRoot is empty")
+	}
+	t.Setenv("PATH", filepath.Join(systemRoot, "System32"))
+
+	pipelineContents := []byte("version: 1\npipelines:\n  default:\n    steps:\n      - name: shell\n        run: echo hello\n        shell: cmd\n      - name: command\n        exec: cmd.exe\n")
+	if err := os.WriteFile(filepath.Join(workdir, "watt.yaml"), pipelineContents, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	command := newRootCommand()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.SetOut(&stdout)
+	command.SetErr(&stderr)
+	command.SetArgs([]string{"check", "--env"})
+
+	if got, want := execute(command), EXIT_SUCCESS; got != want {
+		t.Fatalf("exit code = %d, want %d; stderr = %q", got, want, stderr.String())
+	}
+	if got := stdout.String(); got != "" {
+		t.Errorf("stdout = %q, want empty", got)
+	}
+	if got := stderr.String(); got != "" {
+		t.Errorf("stderr = %q, want empty", got)
+	}
+}
+
+func TestCheckEnv_NoSideEffects(t *testing.T) {
+	workdir := t.TempDir()
+	oldWorkingDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(oldWorkingDirectory); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+	systemRoot := os.Getenv("SystemRoot")
+	if systemRoot == "" {
+		t.Fatal("SystemRoot is empty")
+	}
+	t.Setenv("PATH", filepath.Join(systemRoot, "System32"))
+
+	resultDirectory := filepath.Join(workdir, ".watt")
+	if err := os.Mkdir(resultDirectory, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	resultPath := filepath.Join(resultDirectory, "result.json")
+	resultContents := []byte(`{"status":"existing"}`)
+	if err := os.WriteFile(resultPath, resultContents, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pipelineContents := []byte("version: 1\npipelines:\n  default:\n    steps:\n      - name: destructive\n        exec: cmd.exe\n        args:\n          - /c\n          - echo started>started.marker\n")
+	if err := os.WriteFile(filepath.Join(workdir, "watt.yaml"), pipelineContents, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	before := snapshotFiles(t, workdir)
+	command := newRootCommand()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.SetOut(&stdout)
+	command.SetErr(&stderr)
+	command.SetArgs([]string{"check", "--env"})
+
+	if got, want := execute(command), EXIT_SUCCESS; got != want {
+		t.Fatalf("exit code = %d, want %d; stderr = %q", got, want, stderr.String())
+	}
+	if got := stdout.String(); got != "" {
+		t.Errorf("stdout = %q, want empty", got)
+	}
+	if got := stderr.String(); got != "" {
+		t.Errorf("stderr = %q, want empty", got)
+	}
+
+	after := snapshotFiles(t, workdir)
+	if !reflect.DeepEqual(after, before) {
+		t.Errorf("check --env changed the filesystem: before=%v after=%v", before, after)
+	}
+}
+
 func TestCheck_FailurePaths(t *testing.T) {
 	tests := []struct {
 		name     string
