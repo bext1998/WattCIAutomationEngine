@@ -2,7 +2,7 @@
 
 > 產出日期：2026-08-10
 > 工具：Codex（maze-repo-map）
-> 最後更新：2026-08-10（Issue #2～#4、#24 / PR #21～#23、#25 合併後）
+> 最後更新：2026-08-12（Issue #2～#5、#24 / PR #21～#23、#25、#26 合併後）
 
 ---
 
@@ -34,7 +34,7 @@ WattCIAutomationEngine/
   docs/spec.md           — Watt Phase 1 v1.3 功能、架構與驗收規格
   cmd/watt/              — CLI 入口（已實作骨架）
     main.go              — main／execute()：錯誤輸出與 exit code 對應
-    root.go              — cobra root command、run／check 子命令
+    root.go              — cobra root command、run／check（含 --env 環境探測）子命令
     exit.go              — exit code 常數與 exitError 型別
     root_test.go         — CLI 行為測試
   internal/              — 六個核心 package（pipeline、env 已有基礎實作，其餘仍為骨架）
@@ -49,7 +49,7 @@ internal/orchestrator/   — 規劃中的 pipeline 選取、循序執行、fail-
 internal/pipeline/       — YAML 載入、資料模型、靜態驗證（已實作）
 internal/runner/         — 規劃中的單一步驟執行、輸出擷取與狀態判定（骨架）
 internal/result/         — 規劃中的 result 組裝、序列化與寫入（骨架）
-internal/env/            — host → pipeline → step env 合併與 cwd 解析（已實作）
+internal/env/            — host → pipeline → step env 合併與 cwd 解析、exec／shell PATH 探測（已實作）
 internal/proc/           — 規劃中的 Windows Job Object 與 process tree 管理（骨架）
 ```
 
@@ -65,6 +65,7 @@ internal/proc/           — 規劃中的 Windows Job Object 與 process tree �
 | `cmd/watt/root.go` | Cobra root command、`run` stub 與 `check` 靜態驗證子命令 |
 | `internal/pipeline/pipeline.go` | strict YAML 載入、預設 shell 與靜態驗證 |
 | `internal/env/merge.go`、`internal/env/cwd.go` | 三層 env 合併與 step cwd 解析 |
+| `internal/env/probe.go` | `ResolveExecutable`：包 `exec.LookPath`，供 `watt check --env` 探測 exec／shell 是否可解析 |
 | `scripts/build.ps1` | Windows/amd64、`CGO_ENABLED=0`、`-trimpath` build；以 `-X main.version` 注入版本 |
 | `DECISIONS.md` | 規格狀態與重大設計決策的索引 |
 | `AGENTS.md` | 專案範圍、架構方向、執行／authoring 權限與驗證規則 |
@@ -77,9 +78,9 @@ internal/proc/           — 規劃中的 Windows Job Object 與 process tree �
 
 ## 進入點
 
-- **啟動方式**：目前可使用 `watt --version`、`watt --help`、`watt check`；`watt run [pipeline]` 與 `watt check --env` 為後續實作。
+- **啟動方式**：目前可使用 `watt --version`、`watt --help`、`watt check`、`watt check --env`；`watt run [pipeline]` 為後續實作。
 - **主要進入點**：`cmd/watt/main.go` 的 `main()`；實際邏輯在 `execute()`，回傳 exit code 交給 `os.Exit`。
-- **目前行為**：`watt --version` 輸出版本；`watt` 印 help；`check` 載入並 strict decode／靜態驗證 repo root 的 `watt.yaml`，不啟動 step；`run` 回 `EXIT_INTERNAL_ERROR`（5）並輸出 `run is not implemented`；usage error（未知命令／旗標／多餘參數）回 2。
+- **目前行為**：`watt --version` 輸出版本；`watt` 印 help；`check` 載入並 strict decode／靜態驗證 repo root 的 `watt.yaml`，不啟動 step；`check --env` 額外遍歷全部 pipeline／step，探測 `exec` 目標與 `run` 所需 shell（pwsh／cmd）是否可在 PATH 解析，缺失時回 `EXIT_ENVIRONMENT_UNAVAILABLE`（3）並列出缺項，不啟動任何 process、不寫 result.json；`run` 回 `EXIT_INTERNAL_ERROR`（5）並輸出 `run is not implemented`；usage error（未知命令／旗標／多餘參數）回 2。
 
 ---
 
@@ -95,7 +96,7 @@ internal/proc/           — 規劃中的 Windows Job Object 與 process tree �
 
 ## 測試
 
-- **測試檔案**：`cmd/watt/root_test.go`（CLI、`check` 無副作用／失敗路徑、usage error、help 與 `exitError`）；`internal/pipeline/pipeline_test.go`（載入與靜態驗證）；`internal/env/*_test.go`（env 合併與 cwd 解析）。
+- **測試檔案**：`cmd/watt/root_test.go`（CLI、`check`／`check --env` 無副作用／失敗路徑、usage error、help 與 `exitError`）；`internal/pipeline/pipeline_test.go`（載入與靜態驗證）；`internal/env/*_test.go`（env 合併、cwd 解析與 `ResolveExecutable` PATH 探測）。
 - **執行測試**：`go test ./...`；本次 closeout 未新增執行 QA，repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），已在 PR #25 與 main push 各成功執行一次，但仍沒有獨立 QA 報告。
 
 ---
@@ -111,4 +112,5 @@ internal/proc/           — 規劃中的 Windows Job Object 與 process tree �
 
 - Issue #6（Exec Step／`watt run`）尚未開始，後續 #7、#8、#9 等執行期能力仍受其相依關係影響。
 - `watt.yaml` 尚未納入 repository；目前只能透過測試或外部工作目錄提供 pipeline 定義驗證 `watt check`。
-- repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），已在 PR #25 與 main push 各成功執行一次；仍沒有獨立 QA 報告。目前 GitHub 的 #21～#23、#25 PR 已合併，可引用 PR #25 的 CI 執行紀錄作為 rollup。
+- repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），已在 PR #25、#26 與 main push 各成功執行一次；仍沒有獨立 QA 報告。目前 GitHub 的 #21～#23、#25、#26 PR 已合併，可引用其 CI 執行紀錄作為 rollup。
+- Issue #5（`watt check --env`）已完成並關閉（PR #26）；其 Blocks 的 Environment Diagnostics／已知環境值 Redaction sub-issue（result.json 的 `environment` 診斷區塊）仍待排入後續前線，`watt run` 執行期的環境探測（Exec/Shell Step sub-issue）也仍未實作。

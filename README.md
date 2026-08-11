@@ -6,9 +6,9 @@ Watt 的核心定位是「消費者 → Watt」：Watt 不認知 Taylor、看板
 
 ## 目前狀態
 
-目前 repository 已合併 Issue #2～#4：包含 Go module、Cobra CLI 入口、Windows/amd64 build 設定、pipeline strict decode／靜態驗證，以及 env/cwd 基礎能力。`watt --version`、`watt --help` 可使用；`watt check` 已能驗證 repository root 的 `watt.yaml` 且不啟動 step，但 `watt run` 仍是 stub，尚不可作為正式 validation gate。
+目前 repository 已合併 Issue #2～#5：包含 Go module、Cobra CLI 入口、Windows/amd64 build 設定、pipeline strict decode／靜態驗證、env/cwd 基礎能力，以及 `watt check --env` 環境探測。`watt --version`、`watt --help` 可使用；`watt check` 已能驗證 repository root 的 `watt.yaml` 且不啟動 step，`watt check --env` 會額外探測 exec 目標與 shell 是否可解析；但 `watt run` 仍是 stub，尚不可作為正式 validation gate。
 
-功能規格位於 [`docs/spec.md`](docs/spec.md)，目前為 v1.3 Review 狀態。下一階段是 [Issue #6](https://github.com/bext1998/WattCIAutomationEngine/issues/6) 的 Exec Step 執行核心；Shell Step、Job Object／cancellation、result／redaction 與 `check --env` 尚未完成。
+功能規格位於 [`docs/spec.md`](docs/spec.md)，目前為 v1.3 Review 狀態。下一階段是 [Issue #6](https://github.com/bext1998/WattCIAutomationEngine/issues/6) 的 Exec Step 執行核心；Shell Step、Job Object／cancellation 與 result／redaction 尚未完成。
 
 ## 技術條件
 
@@ -58,7 +58,7 @@ watt check
 watt check --env
 ```
 
-目前 `check` 已只做 pipeline 靜態驗證，不啟動任何 step；`check --env` 尚未支援。`run` 預期依 pipeline 定義循序執行 test/build/package，但目前仍回報 not implemented。
+目前 `check` 已只做 pipeline 靜態驗證，不啟動任何 step；`check --env` 會額外探測全部 pipeline／step 的 exec 目標與所需 shell（pwsh／cmd）是否可在 PATH 解析，缺失時回 `EXIT_ENVIRONMENT_UNAVAILABLE` 並列出缺項，同樣不啟動任何 process、不寫 result.json。`run` 預期依 pipeline 定義循序執行 test/build/package，但目前仍回報 not implemented。
 
 ## Pipeline 目標格式
 
@@ -107,7 +107,7 @@ cmd/watt → internal/orchestrator → internal/pipeline
 - `internal/orchestrator`：規劃中的 pipeline 選取、循序執行、fail-fast 與結果決策（尚未實作）
 - `internal/pipeline`：YAML 載入、資料模型與靜態驗證（已實作）
 - `internal/runner`：規劃中的單一步驟執行、輸出擷取與狀態判定（尚未實作）
-- `internal/env`：host → pipeline → step 的環境合併與 cwd 解析（已實作）
+- `internal/env`：host → pipeline → step 的環境合併與 cwd 解析、exec／shell PATH 探測（已實作）
 - `internal/proc`：規劃中的 Windows Job Object、process tree 與 cancellation（尚未實作）
 - `internal/result`：規劃中的 Result 組裝、序列化與寫入（尚未實作）
 
@@ -118,7 +118,7 @@ cmd/watt → internal/orchestrator → internal/pipeline
 - `docs/spec.md` 是功能、架構與驗收標準的權威來源。
 - §7 `[FROZEN]` 契約不得在未經 spec revision 的情況下變更。
 - Phase 1 維持循序執行與 fail-fast，不預作平行 step、timeout、matrix 或 sandbox 功能。
-- Issue #2～#4 已合併；目前工作前線是 [Issue #6](https://github.com/bext1998/WattCIAutomationEngine/issues/6)。
+- Issue #2～#5 已合併；目前工作前線是 [Issue #6](https://github.com/bext1998/WattCIAutomationEngine/issues/6)。
 - 修改前請先閱讀 [`NEXT_ACTION.md`](NEXT_ACTION.md) 與相關 spec 章節。
 
 ## License
