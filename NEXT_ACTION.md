@@ -20,6 +20,7 @@
 
 - 阻塞：無；#6 的前置 #3、#4 已關閉。
 - 驗證缺口：repository 現有 `.github/workflows/ci.yml`，已在 PR #25／#26 與 main push 各成功執行一次（go vet／go test／build／smoke test），但仍沒有針對 Issue #6 驗收條件的執行紀錄或 QA 報告；需依 `docs\spec.md` §13 逐項補驗。
+- 已知測試缺口（PR #26 合併前審查發現，暫不補測，登記待下次一併處理）：`watt check --env` 現有的「偵測缺少 shell」測試只驗證 PATH 完全清空的情境，沒有驗證「PATH 內有 `powershell.exe`（5.1）但沒有 `pwsh.exe`（7）」這個 spec §4.2／§8.3 明確禁止 fallback 的具體情境；`internal/env.ResolveExecutable` 目前本身沒有 fallback 邏輯，不是現在就壞的 bug，但這條防線沒有測試守住，之後若被誰加了 fallback 不會被抓到。建議在推進 Environment Diagnostics／已知環境值 Redaction sub-issue（或下次碰 `internal/env`／`cmd/watt` 時）一併補上這個測試案例。
 
 ## 權威連結
 
