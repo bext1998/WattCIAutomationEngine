@@ -8,8 +8,8 @@
 - 專案名稱：Watt
 - 目標工具：Claude Code；Codex 可參與規格審查、實作與 closeout 文件同步
 - 建立日期：2026-08-08
-- 目前狀態：`in-progress`；Issue #2、#3、#4、#5、#24 已完成，下一個未完成前線為 Issue #6
-- 最後同步：2026-08-12
+- 目前狀態：`in-progress`；Issue #2、#3、#4、#5、#6、#24 已完成，下一個未完成前線為 Issue #9
+- 最後同步：2026-08-14
 
 ## 文件
 
@@ -34,8 +34,8 @@
 - Category label convention：repo 現有 bug／documentation／enhancement／duplicate／good first issue／help wanted／invalid／question／wontfix；優先比對既有標籤
 - Default assignee policy：每次執行 spec-to-issues 時詢問（本人／不指派／逐項／指定帳號）
 - Allow label creation：待各次執行時於 Dry Run 取得確認
-- Current delivery：Issue #2、#3、#4、#5、#24 已關閉；PR #21、#22、#23、#25、#26 已合併；Parent Issue #1 與下一個 P0 Issue #6 仍開啟
-- CI／QA evidence：repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），已在 PR #25／#26 與 main push 各成功執行一次；仍沒有獨立 QA 報告
+- Current delivery：Issue #2、#3、#4、#5、#6、#24 已關閉；PR #21、#22、#23、#25、#26、#27 已合併；Parent Issue #1 與下一個 P0 Issue #9 仍開啟
+- CI／QA evidence：repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），已在 PR #25／#26／#27 與 main push 各成功執行一次；仍沒有獨立 QA 報告
 
 ## 備注
 

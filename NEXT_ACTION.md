@@ -4,27 +4,27 @@
 
 ## 目前狀態
 
-`in-progress`。Issue #5（`watt check --env` 環境探測）已完成並關閉，PR #26 已合併；Issue #6 是目前唯一已解除前置阻塞的 P0 核心工作，尚未開始；Parent Issue #1 仍開啟。
+`in-progress`。Issue #6（Exec Step 執行核心路徑）已完成並關閉，PR #27 已合併；Issue #9（Environment Diagnostics 與已知環境值 Redaction）是目前唯一已解除前置阻塞的 P0 工作，尚未開始；Parent Issue #1 仍開啟。
 
 ## 下一個 Session 目標
 
-完成 [Issue #6](https://github.com/bext1998/WattCIAutomationEngine/issues/6) 的 Exec Step 執行核心路徑，讓已完成的 pipeline 靜態驗證與 env/cwd 基礎能力接上第一條可驗證的 `watt run`、partial result 與 exit-code 流程。
+完成 [Issue #9](https://github.com/bext1998/WattCIAutomationEngine/issues/9)：讓 `result.json` 的 `environment` 診斷區塊與 `output_tail`／`resolved_command` 的已知環境值遮罩落地，通過 AC-7 secret 不外洩驗收。
 
 ## 行動（最多 3 項）
 
-1. 實作 #6：完成 default／具名 pipeline 選取、循序 fail-fast、直接啟動 Exec Step、即時 stdout/stderr 透傳與 result.json 組裝。
-2. 依 #6 的驗收條件補齊並驗證 AC-1～AC-3、partial result、cwd／command failure 與 output tail／exit-code 語意。
-3. #6 合併並關閉後，依相依關係推進 [#7](https://github.com/bext1998/WattCIAutomationEngine/issues/7) Shell Step 與 [#8](https://github.com/bext1998/WattCIAutomationEngine/issues/8) Windows Job Object／Cancellation；Issue #5 已完成，其 Blocks 的 Environment Diagnostics／已知環境值 Redaction sub-issue 亦已解除前置阻塞，可視優先度排入後續前線。
+1. 實作 #9：`internal/env` 產出經 redaction 的 environment diagnostics（os/arch、shell_available、resolved_tools、env_var_names，僅名稱不含值）；`internal/runner` 序列化 `output_tail`／`resolved_command` 前，遮罩 effective environment 中長度 ≥8 字元的已知非空 value。
+2. 驗證 AC-7、`TestEnvDiagnostics_NoValuesLeaked`、`TestResult_OutputTail_RedactsKnownEnvValues` 通過，並確認遮罩不延伸至即時終端透傳（R-4／R-8 邊界）。
+3. #9 完成後，依優先度排入 [#7](https://github.com/bext1998/WattCIAutomationEngine/issues/7) Shell Step 或 [#8](https://github.com/bext1998/WattCIAutomationEngine/issues/8) Windows Job Object／Cancellation（兩者皆 P1，已解除前置阻塞）。
 
 ## 阻塞與待決策
 
-- 阻塞：無；#6 的前置 #3、#4 已關閉。
-- 驗證缺口：repository 現有 `.github/workflows/ci.yml`，已在 PR #25／#26 與 main push 各成功執行一次（go vet／go test／build／smoke test），但仍沒有針對 Issue #6 驗收條件的執行紀錄或 QA 報告；需依 `docs\spec.md` §13 逐項補驗。
-- 已知測試缺口（PR #26 合併前審查發現，暫不補測，登記待下次一併處理）：`watt check --env` 現有的「偵測缺少 shell」測試只驗證 PATH 完全清空的情境，沒有驗證「PATH 內有 `powershell.exe`（5.1）但沒有 `pwsh.exe`（7）」這個 spec §4.2／§8.3 明確禁止 fallback 的具體情境；`internal/env.ResolveExecutable` 目前本身沒有 fallback 邏輯，不是現在就壞的 bug，但這條防線沒有測試守住，之後若被誰加了 fallback 不會被抓到。建議在推進 Environment Diagnostics／已知環境值 Redaction sub-issue（或下次碰 `internal/env`／`cmd/watt` 時）一併補上這個測試案例。
+- 阻塞：無；#9 的前置 #5、#6 已關閉。
+- 已知測試缺口（PR #26 合併前發現，尚未補測）：`watt check --env` 的「偵測缺少 shell」測試未覆蓋「PATH 有 `powershell.exe`（5.1）但無 `pwsh.exe`（7）」這個 spec §4.2／§8.3 明確禁止 fallback 的情境；建議與 #9 一併補上。
+- PR #27（Issue #6）審查（pi + Claude 核實，見 [PR #27 留言](https://github.com/bext1998/WattCIAutomationEngine/pull/27#issuecomment-5285418121)）留下的非阻擋技術債：`orchestrator.WattVersion` 寫死 `"dev"`、`runner.resolved_command` 以空白 join args 對含空白參數失真、Run-mode 失敗訊息未帶 step 名稱、`result.Write` 失敗時吞掉原始 step 錯誤，以及三項測試缺口（無效 UTF-8 截斷邊界、`resolved_command` 特殊字元、`result.Write` 失敗路徑）；不影響已合併之驗收條件，留給後續 issue 或 polish 一併處理。
 
 ## 權威連結
 
 - `docs\spec.md`（v1.3，Review）
-- [Issue #6](https://github.com/bext1998/WattCIAutomationEngine/issues/6)（目前下一個工作前線）
+- [Issue #9](https://github.com/bext1998/WattCIAutomationEngine/issues/9)（目前下一個工作前線）
 - [Parent Issue #1](https://github.com/bext1998/WattCIAutomationEngine/issues/1)（追蹤全部 Sub-issue 進度，以 GitHub 為工作狀態權威）
-- [PR #26](https://github.com/bext1998/WattCIAutomationEngine/pull/26)（最近合併：`watt check --env` 環境探測，closes #5）
+- [PR #27](https://github.com/bext1998/WattCIAutomationEngine/pull/27)（最近合併：Exec Step 執行核心路徑，closes #6）

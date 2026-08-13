@@ -1,7 +1,7 @@
 # Watt — 專案說明
 
 > 建立日期：2026-08-08
-> 最後更新：2026-08-12
+> 最後更新：2026-08-14
 
 ---
 
@@ -60,5 +60,5 @@ Watt 解決兩個相鄰但不同的問題：
 - Issue #3 已完成：strict YAML decode、pipeline 資料模型與靜態驗證；`watt check` 只載入／驗證 `watt.yaml`，不啟動 step。
 - Issue #4 已完成：host → pipeline → step 的 env 合併（key 不分大小寫）與 step `cwd` 相對 repository root 解析。
 - Issue #5 已完成：`watt check --env` 環境探測，遍歷全部 pipeline／step 檢查 exec 目標與 shell（pwsh／cmd）是否可在 PATH 解析，缺失時回 `EXIT_ENVIRONMENT_UNAVAILABLE` 並列出缺項；PR #26 已合併。
-- Issue #6（Exec Step／`watt run`）尚未實作；Shell Step、Job Object／cancellation、result／redaction 仍是後續工作。
+- Issue #6 已完成：`watt run`／`watt run <pipeline>` 的 Exec Step 執行核心路徑（default／具名 pipeline 選取、fail-fast、result.json 產出、exit code 判定）；PR #27 已合併。Shell Step、Job Object／cancellation、environment diagnostics／redaction 仍是後續工作。
 - Issue #24 已完成：新增 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），PR #25 已合併；CI 已在 PR／main push 各成功執行一次，但仍沒有獨立 QA 報告。`cmd`、`pipeline`、`env` 已有針對性測試檔。
