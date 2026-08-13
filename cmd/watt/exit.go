@@ -2,6 +2,7 @@ package main
 
 const (
 	EXIT_SUCCESS                 = 0
+	EXIT_STEP_FAILED             = 1
 	EXIT_INVALID_PIPELINE        = 2
 	EXIT_USAGE                   = EXIT_INVALID_PIPELINE
 	EXIT_ENVIRONMENT_UNAVAILABLE = 3

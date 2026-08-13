@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/bext1998/WattCIAutomationEngine/internal/env"
+	"github.com/bext1998/WattCIAutomationEngine/internal/orchestrator"
 	"github.com/bext1998/WattCIAutomationEngine/internal/pipeline"
 )
 
@@ -22,6 +23,13 @@ func wrapUsageError(err error) error {
 func usageArgs(command *cobra.Command, args []string) error {
 	if err := cobra.NoArgs(command, args); err != nil {
 		return wrapUsageError(err)
+	}
+	return nil
+}
+
+func runArgs(_ *cobra.Command, args []string) error {
+	if len(args) > 1 {
+		return wrapUsageError(fmt.Errorf("run accepts at most one pipeline name, got %d arguments", len(args)))
 	}
 	return nil
 }
@@ -90,12 +98,6 @@ func newRootCommand() *cobra.Command {
 	command.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return wrapUsageError(err)
 	})
-	notImplemented := func(command *cobra.Command, _ []string) error {
-		return &exitError{
-			code: EXIT_INTERNAL_ERROR,
-			err:  fmt.Errorf("%s is not implemented", command.Name()),
-		}
-	}
 	var checkEnv bool
 	check := &cobra.Command{
 		Use:  "check",
@@ -122,8 +124,36 @@ func newRootCommand() *cobra.Command {
 		},
 	}
 	check.Flags().BoolVar(&checkEnv, "env", false, "check required commands and shells in PATH")
+	run := &cobra.Command{
+		Use:  "run [pipeline]",
+		Args: runArgs,
+		RunE: func(command *cobra.Command, args []string) error {
+			repoRoot, err := os.Getwd()
+			if err != nil {
+				return &exitError{code: EXIT_INTERNAL_ERROR, err: fmt.Errorf("get repository root: %w", err)}
+			}
+
+			pipelineName := ""
+			if len(args) == 1 {
+				pipelineName = args[0]
+			}
+			outcome, err := orchestrator.Run(orchestrator.Options{
+				RepoRoot:     repoRoot,
+				PipelineName: pipelineName,
+				Stdout:       command.OutOrStdout(),
+				Stderr:       command.ErrOrStderr(),
+			})
+			if err != nil {
+				return &exitError{code: int(outcome.Code), err: err}
+			}
+			if outcome.Code != orchestrator.ExitSuccess {
+				return &exitError{code: int(outcome.Code), err: fmt.Errorf("pipeline finished with exit code %d", outcome.Code)}
+			}
+			return nil
+		},
+	}
 	command.AddCommand(
-		&cobra.Command{Use: "run", Args: usageArgs, RunE: notImplemented},
+		run,
 		check,
 	)
 
