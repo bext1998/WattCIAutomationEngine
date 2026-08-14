@@ -80,7 +80,18 @@ func Run(step Step) Result {
 			return result
 		}
 		commandName = step.Shell
-		commandArgs = shellArgs(step.Shell, step.Run)
+		if step.Shell == "cmd" {
+			var cleanup func()
+			commandArgs, cleanup, err = cmdArgs(step.Run)
+			if err != nil {
+				result.Status = StatusFailed
+				result.Err = fmt.Errorf("create cmd script: %w", err)
+				return result
+			}
+			defer cleanup()
+		} else {
+			commandArgs = shellArgs(step.Shell, step.Run)
+		}
 		commandPath = resolvedShell
 	}
 
@@ -140,11 +151,34 @@ func shellArgs(shell, script string) []string {
 	switch shell {
 	case "pwsh":
 		return []string{"-Command", script}
-	case "cmd":
-		return []string{"/c", script}
 	default:
 		return nil
 	}
+}
+
+func cmdArgs(script string) ([]string, func(), error) {
+	file, err := os.CreateTemp("", "watt-shell-*.cmd")
+	if err != nil {
+		return nil, nil, err
+	}
+	path := file.Name()
+	cleanup := func() {
+		_ = os.Remove(path)
+	}
+
+	script = strings.ReplaceAll(script, "\r\n", "\n")
+	script = strings.ReplaceAll(script, "\n", "\r\n")
+	if _, err := file.WriteString(script); err != nil {
+		_ = file.Close()
+		cleanup()
+		return nil, nil, err
+	}
+	if err := file.Close(); err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+
+	return []string{"/c", "call", path}, cleanup, nil
 }
 
 type tailBuffer struct {

@@ -66,11 +66,14 @@ func TestRunReportsEnvironmentUnavailableWithoutExitCode(t *testing.T) {
 func TestShellStep_CmdSupport(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
+	tempDir := t.TempDir()
+	t.Setenv("TEMP", tempDir)
+	t.Setenv("TMP", tempDir)
 
 	got := Run(Step{
 		Name:   "cmd",
 		Shell:  "cmd",
-		Run:    "echo cmd stdout & echo cmd stderr 1>&2",
+		Run:    "echo cmd stdout\necho cmd stderr 1>&2\n",
 		Stdout: &stdout,
 		Stderr: &stderr,
 	})
@@ -92,6 +95,9 @@ func TestShellStep_CmdSupport(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "cmd stderr") {
 		t.Errorf("stderr passthrough = %q, want cmd output", stderr.String())
+	}
+	if matches, err := filepath.Glob(filepath.Join(tempDir, "watt-shell-*.cmd")); err != nil || len(matches) != 0 {
+		t.Errorf("temporary cmd scripts = %v, error = %v; want none", matches, err)
 	}
 }
 
@@ -124,6 +130,53 @@ func TestShellStep_PwshSupport(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "pwsh stderr") {
 		t.Errorf("stderr passthrough = %q, want pwsh output", stderr.String())
+	}
+}
+
+func TestShellStep_PwshFailureReportsExitCode(t *testing.T) {
+	got := Run(Step{
+		Name:  "pwsh-failure",
+		Shell: "pwsh",
+		Run:   "exit 3",
+	})
+
+	if got.Status != StatusFailed {
+		t.Fatalf("status = %q, want %q; error = %v", got.Status, StatusFailed, got.Err)
+	}
+	if got.ExitCode == nil || *got.ExitCode != 3 {
+		t.Errorf("exit code = %v, want 3", got.ExitCode)
+	}
+}
+
+func TestShellStep_CmdMultilineFailureReportsExitCode(t *testing.T) {
+	var stdout bytes.Buffer
+	tempDir := t.TempDir()
+	t.Setenv("TEMP", tempDir)
+	t.Setenv("TMP", tempDir)
+
+	got := Run(Step{
+		Name:   "cmd-failure",
+		Shell:  "cmd",
+		Run:    "echo step-one\necho step-two\nexit 7\n",
+		Stdout: &stdout,
+	})
+
+	if got.Status != StatusFailed {
+		t.Fatalf("status = %q, want %q; error = %v", got.Status, StatusFailed, got.Err)
+	}
+	if got.ExitCode == nil || *got.ExitCode != 7 {
+		t.Errorf("exit code = %v, want 7", got.ExitCode)
+	}
+	for _, line := range []string{"step-one", "step-two"} {
+		if !strings.Contains(got.OutputTail.Stdout, line) {
+			t.Errorf("stdout tail = %q, want %q", got.OutputTail.Stdout, line)
+		}
+		if !strings.Contains(stdout.String(), line) {
+			t.Errorf("stdout passthrough = %q, want %q", stdout.String(), line)
+		}
+	}
+	if matches, err := filepath.Glob(filepath.Join(tempDir, "watt-shell-*.cmd")); err != nil || len(matches) != 0 {
+		t.Errorf("temporary cmd scripts = %v, error = %v; want none", matches, err)
 	}
 }
 
