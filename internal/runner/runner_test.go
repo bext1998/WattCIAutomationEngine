@@ -2,8 +2,11 @@ package runner
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -57,6 +60,106 @@ func TestRunReportsEnvironmentUnavailableWithoutExitCode(t *testing.T) {
 	}
 	if got.OutputTail != (OutputTail{}) {
 		t.Errorf("output tail = %#v, want empty output", got.OutputTail)
+	}
+}
+
+func TestShellStep_CmdSupport(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	got := Run(Step{
+		Name:   "cmd",
+		Shell:  "cmd",
+		Run:    "echo cmd stdout & echo cmd stderr 1>&2",
+		Stdout: &stdout,
+		Stderr: &stderr,
+	})
+
+	if got.Status != StatusSuccess {
+		t.Fatalf("status = %q, want %q; error = %v", got.Status, StatusSuccess, got.Err)
+	}
+	if got.ExitCode == nil || *got.ExitCode != 0 {
+		t.Fatalf("exit code = %v, want 0", got.ExitCode)
+	}
+	if !strings.Contains(got.OutputTail.Stdout, "cmd stdout") {
+		t.Errorf("stdout tail = %q, want cmd output", got.OutputTail.Stdout)
+	}
+	if !strings.Contains(got.OutputTail.Stderr, "cmd stderr") {
+		t.Errorf("stderr tail = %q, want cmd output", got.OutputTail.Stderr)
+	}
+	if !strings.Contains(stdout.String(), "cmd stdout") {
+		t.Errorf("stdout passthrough = %q, want cmd output", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "cmd stderr") {
+		t.Errorf("stderr passthrough = %q, want cmd output", stderr.String())
+	}
+}
+
+func TestShellStep_PwshSupport(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	got := Run(Step{
+		Name:   "pwsh",
+		Shell:  "pwsh",
+		Run:    "Write-Output 'pwsh stdout'; [Console]::Error.Write('pwsh stderr')",
+		Stdout: &stdout,
+		Stderr: &stderr,
+	})
+
+	if got.Status != StatusSuccess {
+		t.Fatalf("status = %q, want %q; error = %v", got.Status, StatusSuccess, got.Err)
+	}
+	if got.ExitCode == nil || *got.ExitCode != 0 {
+		t.Fatalf("exit code = %v, want 0", got.ExitCode)
+	}
+	if !strings.Contains(got.OutputTail.Stdout, "pwsh stdout") {
+		t.Errorf("stdout tail = %q, want pwsh output", got.OutputTail.Stdout)
+	}
+	if !strings.Contains(got.OutputTail.Stderr, "pwsh stderr") {
+		t.Errorf("stderr tail = %q, want pwsh output", got.OutputTail.Stderr)
+	}
+	if !strings.Contains(stdout.String(), "pwsh stdout") {
+		t.Errorf("stdout passthrough = %q, want pwsh output", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "pwsh stderr") {
+		t.Errorf("stderr passthrough = %q, want pwsh output", stderr.String())
+	}
+}
+
+func TestMissingPwsh_NoFallbackTo51(t *testing.T) {
+	binDir := t.TempDir()
+	marker := filepath.Join(t.TempDir(), "powershell-51-ran")
+	fakePowerShell := filepath.Join(binDir, "powershell.cmd")
+	if err := os.WriteFile(fakePowerShell, []byte("@echo off\r\necho fallback > \"%WATT_RUNNER_FALLBACK_MARKER%\"\r\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir)
+	t.Setenv("PATHEXT", ".COM;.EXE;.BAT;.CMD")
+	if _, err := exec.LookPath("powershell"); err != nil {
+		t.Fatalf("fallback decoy cannot be resolved: %v", err)
+	}
+
+	host := environmentFromEntries(os.Environ())
+	host["WATT_RUNNER_FALLBACK_MARKER"] = marker
+	got := Run(Step{
+		Name:    "missing-pwsh",
+		Shell:   "pwsh",
+		Run:     "Write-Output should-not-run",
+		HostEnv: host,
+	})
+
+	if got.Status != StatusEnvironmentUnavailable {
+		t.Fatalf("status = %q, want %q; error = %v", got.Status, StatusEnvironmentUnavailable, got.Err)
+	}
+	if got.ExitCode != nil {
+		t.Errorf("exit code = %v, want nil", got.ExitCode)
+	}
+	if got.Err == nil || !strings.Contains(got.Err.Error(), "pwsh") {
+		t.Errorf("error = %v, want missing pwsh", got.Err)
+	}
+	if _, err := os.Stat(marker); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("Windows PowerShell fallback marker exists or could not be checked: %v", err)
 	}
 }
 

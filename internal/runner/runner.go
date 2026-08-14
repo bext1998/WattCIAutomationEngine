@@ -31,6 +31,7 @@ type Step struct {
 	Exec        string
 	Args        []string
 	Run         string
+	Shell       string
 	Cwd         string
 	HostEnv     map[string]string
 	PipelineEnv map[string]string
@@ -62,28 +63,37 @@ func Run(step Step) Result {
 		},
 	}
 
-	if strings.TrimSpace(step.Run) != "" {
-		result.Status = StatusFailed
-		result.Err = errors.New("shell step execution is not implemented")
-		return result
-	}
-
 	effectiveEnvironment := step.HostEnv
 	if effectiveEnvironment == nil {
 		effectiveEnvironment = hostEnvironment()
 	}
 	effectiveEnvironment = env.Merge(effectiveEnvironment, step.PipelineEnv, step.StepEnv)
 
-	command := exec.Command(step.Exec, step.Args...)
+	commandName := step.Exec
+	commandArgs := step.Args
+	commandPath := step.Exec
+	if strings.TrimSpace(step.Run) != "" {
+		resolvedShell, err := env.ResolveExecutable(step.Shell)
+		if err != nil {
+			result.Status = StatusEnvironmentUnavailable
+			result.Err = fmt.Errorf("shell %q is unavailable: %w", step.Shell, err)
+			return result
+		}
+		commandName = step.Shell
+		commandArgs = shellArgs(step.Shell, step.Run)
+		commandPath = resolvedShell
+	}
+
+	command := exec.Command(commandPath, commandArgs...)
 	command.Env = environmentEntries(effectiveEnvironment)
 	command.Dir = env.ResolveCwd(step.RepoRoot, step.Cwd)
 
 	if command.Err != nil {
 		result.Status = StatusEnvironmentUnavailable
-		result.Err = fmt.Errorf("command %q is unavailable: %w", step.Exec, command.Err)
+		result.Err = fmt.Errorf("command %q is unavailable: %w", commandName, command.Err)
 		return result
 	}
-	result.ResolvedCommand = strings.Join(append([]string{step.Exec}, step.Args...), " ")
+	result.ResolvedCommand = strings.Join(append([]string{commandName}, commandArgs...), " ")
 
 	stdoutTail := &tailBuffer{}
 	stderrTail := &tailBuffer{}
@@ -102,9 +112,9 @@ func Run(step Step) Result {
 		result.Status = StatusFailed
 		if errors.Is(err, exec.ErrNotFound) {
 			result.Status = StatusEnvironmentUnavailable
-			result.Err = fmt.Errorf("command %q is unavailable: %w", step.Exec, err)
+			result.Err = fmt.Errorf("command %q is unavailable: %w", commandName, err)
 		} else {
-			result.Err = fmt.Errorf("start command %q: %w", step.Exec, err)
+			result.Err = fmt.Errorf("start command %q: %w", commandName, err)
 		}
 		result.OutputTail = OutputTail{Stdout: stdoutTail.String(), Stderr: stderrTail.String()}
 		return result
@@ -118,12 +128,23 @@ func Run(step Step) Result {
 	}
 	if err != nil {
 		result.Status = StatusFailed
-		result.Err = fmt.Errorf("command %q failed: %w", step.Exec, err)
+		result.Err = fmt.Errorf("command %q failed: %w", commandName, err)
 		return result
 	}
 
 	result.Status = StatusSuccess
 	return result
+}
+
+func shellArgs(shell, script string) []string {
+	switch shell {
+	case "pwsh":
+		return []string{"-Command", script}
+	case "cmd":
+		return []string{"/c", script}
+	default:
+		return nil
+	}
 }
 
 type tailBuffer struct {
