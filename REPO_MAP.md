@@ -32,6 +32,7 @@ WattCIAutomationEngine/
   .gitignore             — 忽略 /dist/ 與 *.exe
   .github/workflows/ci.yml — CI：push／PR／手動觸發，windows-latest 執行 go vet／go test／build／smoke test
   docs/spec.md           — Watt Phase 1 v1.3 功能、架構與驗收規格
+  docs/agent-rules/      — 按任務按需讀取的規則檔（process、result-env、testing、github-actions）
   cmd/watt/              — CLI 入口（已實作骨架）
     main.go              — main／execute()：錯誤輸出與 exit code 對應
     root.go              — cobra root command、run／check（含 --env 環境探測）子命令
@@ -71,10 +72,14 @@ internal/proc/           — 規劃中的 Windows Job Object 與 process tree �
 | `internal/result/result.go` | Result／Step schema 落地、序列化與 `.watt/result.json` 寫入（Issue #6） |
 | `scripts/build.ps1` | Windows/amd64、`CGO_ENABLED=0`、`-trimpath` build；以 `-X main.version` 注入版本 |
 | `DECISIONS.md` | 規格狀態與重大設計決策的索引 |
-| `AGENTS.md` | 專案範圍、架構方向、執行／authoring 權限與驗證規則 |
+| `AGENTS.md` | 核心不可違反規則與 Routing Table；詳細規範按任務類型路由至 `docs/spec.md` 或 `docs/agent-rules/*.md` |
+| `docs/agent-rules/process.md` | Process／Job Object／cancellation／shell step 的 agent 執行規則（process 相關任務時讀） |
+| `docs/agent-rules/result-env.md` | Result／env 合併／redaction 的 agent 執行規則（result／env 相關任務時讀） |
+| `docs/agent-rules/testing.md` | 測試與驗證要求（撰寫測試或判斷驗證是否足夠時讀） |
+| `docs/agent-rules/github-actions.md` | GitHub Actions Node runtime 約束（修改 workflow 時讀） |
 | `MAZE_PROJECT.md` | 專案路徑、GitHub repository 與工作流設定 |
 | `PROJECT_BRIEF.md` | 專案定位、目標、技術棧與限制摘要 |
-| `CLAUDE.md` | Claude Code 工作規則與遠端同步規則 |
+| `CLAUDE.md` | Claude Code 輕量入口，路由至 `AGENTS.md` |
 | `README.md` | 最小專案簡介 |
 
 ---
