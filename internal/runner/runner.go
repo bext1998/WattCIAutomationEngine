@@ -31,6 +31,7 @@ type Step struct {
 	Exec        string
 	Args        []string
 	Run         string
+	Shell       string
 	Cwd         string
 	HostEnv     map[string]string
 	PipelineEnv map[string]string
@@ -62,28 +63,48 @@ func Run(step Step) Result {
 		},
 	}
 
-	if strings.TrimSpace(step.Run) != "" {
-		result.Status = StatusFailed
-		result.Err = errors.New("shell step execution is not implemented")
-		return result
-	}
-
 	effectiveEnvironment := step.HostEnv
 	if effectiveEnvironment == nil {
 		effectiveEnvironment = hostEnvironment()
 	}
 	effectiveEnvironment = env.Merge(effectiveEnvironment, step.PipelineEnv, step.StepEnv)
 
-	command := exec.Command(step.Exec, step.Args...)
+	commandName := step.Exec
+	commandArgs := step.Args
+	commandPath := step.Exec
+	if strings.TrimSpace(step.Run) != "" {
+		resolvedShell, err := env.ResolveExecutable(step.Shell)
+		if err != nil {
+			result.Status = StatusEnvironmentUnavailable
+			result.Err = fmt.Errorf("shell %q is unavailable: %w", step.Shell, err)
+			return result
+		}
+		commandName = step.Shell
+		if step.Shell == "cmd" {
+			var cleanup func()
+			commandArgs, cleanup, err = cmdArgs(step.Run)
+			if err != nil {
+				result.Status = StatusFailed
+				result.Err = fmt.Errorf("create cmd script: %w", err)
+				return result
+			}
+			defer cleanup()
+		} else {
+			commandArgs = shellArgs(step.Shell, step.Run)
+		}
+		commandPath = resolvedShell
+	}
+
+	command := exec.Command(commandPath, commandArgs...)
 	command.Env = environmentEntries(effectiveEnvironment)
 	command.Dir = env.ResolveCwd(step.RepoRoot, step.Cwd)
 
 	if command.Err != nil {
 		result.Status = StatusEnvironmentUnavailable
-		result.Err = fmt.Errorf("command %q is unavailable: %w", step.Exec, command.Err)
+		result.Err = fmt.Errorf("command %q is unavailable: %w", commandName, command.Err)
 		return result
 	}
-	result.ResolvedCommand = strings.Join(append([]string{step.Exec}, step.Args...), " ")
+	result.ResolvedCommand = strings.Join(append([]string{commandName}, commandArgs...), " ")
 
 	stdoutTail := &tailBuffer{}
 	stderrTail := &tailBuffer{}
@@ -102,9 +123,9 @@ func Run(step Step) Result {
 		result.Status = StatusFailed
 		if errors.Is(err, exec.ErrNotFound) {
 			result.Status = StatusEnvironmentUnavailable
-			result.Err = fmt.Errorf("command %q is unavailable: %w", step.Exec, err)
+			result.Err = fmt.Errorf("command %q is unavailable: %w", commandName, err)
 		} else {
-			result.Err = fmt.Errorf("start command %q: %w", step.Exec, err)
+			result.Err = fmt.Errorf("start command %q: %w", commandName, err)
 		}
 		result.OutputTail = OutputTail{Stdout: stdoutTail.String(), Stderr: stderrTail.String()}
 		return result
@@ -118,12 +139,46 @@ func Run(step Step) Result {
 	}
 	if err != nil {
 		result.Status = StatusFailed
-		result.Err = fmt.Errorf("command %q failed: %w", step.Exec, err)
+		result.Err = fmt.Errorf("command %q failed: %w", commandName, err)
 		return result
 	}
 
 	result.Status = StatusSuccess
 	return result
+}
+
+func shellArgs(shell, script string) []string {
+	switch shell {
+	case "pwsh":
+		return []string{"-Command", script}
+	default:
+		return nil
+	}
+}
+
+func cmdArgs(script string) ([]string, func(), error) {
+	file, err := os.CreateTemp("", "watt-shell-*.cmd")
+	if err != nil {
+		return nil, nil, err
+	}
+	path := file.Name()
+	cleanup := func() {
+		_ = os.Remove(path)
+	}
+
+	script = strings.ReplaceAll(script, "\r\n", "\n")
+	script = strings.ReplaceAll(script, "\n", "\r\n")
+	if _, err := file.WriteString(script); err != nil {
+		_ = file.Close()
+		cleanup()
+		return nil, nil, err
+	}
+	if err := file.Close(); err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+
+	return []string{"/c", "call", path}, cleanup, nil
 }
 
 type tailBuffer struct {

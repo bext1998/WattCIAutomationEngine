@@ -101,6 +101,7 @@ func Run(options Options) (Outcome, error) {
 			Exec:        step.Exec,
 			Args:        step.Args,
 			Run:         step.Run,
+			Shell:       step.Shell,
 			Cwd:         step.Cwd,
 			PipelineEnv: definition.Env,
 			StepEnv:     step.Env,
