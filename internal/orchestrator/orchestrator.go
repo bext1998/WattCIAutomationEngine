@@ -34,6 +34,12 @@ type Options struct {
 	Stdout       io.Writer
 	Stderr       io.Writer
 	Context      context.Context
+
+	// ConfirmDeadline is forwarded to runner.Step.ConfirmDeadline (and from
+	// there to proc.Spec.ConfirmDeadline). A non-positive value uses the default
+	// (5 seconds, A-10). Production callers must leave it unset; tests may
+	// shrink it.
+	ConfirmDeadline time.Duration
 }
 
 type Outcome struct {
@@ -127,17 +133,18 @@ func Run(options Options) (Outcome, error) {
 
 		stepStartedAt := time.Now()
 		runResult := runner.Run(ctx, runner.Step{
-			RepoRoot:    repoRoot,
-			Name:        step.Name,
-			Exec:        step.Exec,
-			Args:        step.Args,
-			Run:         step.Run,
-			Shell:       step.Shell,
-			Cwd:         step.Cwd,
-			PipelineEnv: definition.Env,
-			StepEnv:     step.Env,
-			Stdout:      stdout,
-			Stderr:      stderr,
+			RepoRoot:        repoRoot,
+			Name:            step.Name,
+			Exec:            step.Exec,
+			Args:            step.Args,
+			Run:             step.Run,
+			Shell:           step.Shell,
+			Cwd:             step.Cwd,
+			PipelineEnv:     definition.Env,
+			StepEnv:         step.Env,
+			Stdout:          stdout,
+			Stderr:          stderr,
+			ConfirmDeadline: options.ConfirmDeadline,
 		})
 
 		final.Steps = append(final.Steps, result.Step{

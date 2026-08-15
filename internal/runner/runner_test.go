@@ -9,8 +9,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 )
 
@@ -262,6 +264,19 @@ func TestRunnerHelperProcess(t *testing.T) {
 	if os.Getenv("WATT_RUNNER_HELPER") != "1" {
 		return
 	}
+	switch os.Getenv("WATT_RUNNER_MODE") {
+	case "sleep":
+		time.Sleep(60 * time.Second)
+		os.Exit(0)
+	case "spawn_sleeper_exit":
+		_ = os.Setenv("WATT_RUNNER_MODE", "sleep")
+		command := exec.Command(os.Args[0], "-test.run=TestRunnerHelperProcess")
+		if err := command.Start(); err != nil {
+			os.Exit(2)
+		}
+		code, _ := strconv.Atoi(os.Getenv("WATT_RUNNER_EXIT"))
+		os.Exit(code)
+	}
 	if os.Getenv("WATT_RUNNER_LARGE") == "1" {
 		fmt.Fprint(os.Stdout, strings.Repeat("x", 9000)+"尾端")
 		os.Exit(0)
@@ -269,6 +284,31 @@ func TestRunnerHelperProcess(t *testing.T) {
 	fmt.Fprint(os.Stdout, "stdout")
 	fmt.Fprint(os.Stderr, "stderr")
 	os.Exit(0)
+}
+
+func TestRunReportsExitCodeOnCleanupTimeout(t *testing.T) {
+	got := Run(context.Background(), Step{
+		Name: "orphan",
+		Exec: os.Args[0],
+		Args: []string{"-test.run=TestRunnerHelperProcess"},
+		HostEnv: environmentFromEntries(append(os.Environ(),
+			"WATT_RUNNER_HELPER=1",
+			"WATT_RUNNER_MODE=spawn_sleeper_exit",
+			"WATT_RUNNER_EXIT=5",
+		)),
+		// Too short to confirm the orphan cleanup, forcing the fallback.
+		ConfirmDeadline: time.Nanosecond,
+	})
+
+	if got.InternalErr == nil {
+		t.Fatal("InternalErr = nil, want non-nil")
+	}
+	if got.Status != StatusFailed {
+		t.Errorf("status = %q, want %q", got.Status, StatusFailed)
+	}
+	if got.ExitCode == nil || *got.ExitCode != 5 {
+		t.Errorf("exit code = %v, want 5", got.ExitCode)
+	}
 }
 
 func environmentFromEntries(entries []string) map[string]string {

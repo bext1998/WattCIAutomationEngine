@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/bext1998/WattCIAutomationEngine/internal/env"
@@ -41,6 +42,11 @@ type Step struct {
 	StepEnv     map[string]string
 	Stdout      io.Writer
 	Stderr      io.Writer
+
+	// ConfirmDeadline is forwarded to proc.Spec.ConfirmDeadline. A non-positive
+	// value uses the default (5 seconds, A-10). Production callers must leave
+	// it unset; tests may shrink it.
+	ConfirmDeadline time.Duration
 }
 
 type OutputTail struct {
@@ -127,12 +133,13 @@ func Run(ctx context.Context, step Step) Result {
 	}
 
 	outcome := proc.Run(ctx, proc.Spec{
-		Path:   commandPath,
-		Args:   commandArgs,
-		Env:    environmentEntries(effectiveEnvironment),
-		Dir:    env.ResolveCwd(step.RepoRoot, step.Cwd),
-		Stdout: io.MultiWriter(stdout, stdoutTail),
-		Stderr: io.MultiWriter(stderr, stderrTail),
+		Path:            commandPath,
+		Args:            commandArgs,
+		Env:             environmentEntries(effectiveEnvironment),
+		Dir:             env.ResolveCwd(step.RepoRoot, step.Cwd),
+		Stdout:          io.MultiWriter(stdout, stdoutTail),
+		Stderr:          io.MultiWriter(stderr, stderrTail),
+		ConfirmDeadline: step.ConfirmDeadline,
 	})
 
 	result.OutputTail = OutputTail{Stdout: stdoutTail.String(), Stderr: stderrTail.String()}
@@ -147,13 +154,16 @@ func Run(ctx context.Context, step Step) Result {
 			result.Err = fmt.Errorf("start command %q: %w", commandName, outcome.Err)
 		}
 	case proc.StatusExited:
-		exitCode := outcome.ExitCode
-		result.ExitCode = &exitCode
-		if exitCode == 0 {
+		result.ExitCode = outcome.ExitCode
+		if outcome.ExitCode != nil && *outcome.ExitCode == 0 {
 			result.Status = StatusSuccess
 		} else {
 			result.Status = StatusFailed
-			result.Err = fmt.Errorf("command %q failed with exit code %d", commandName, exitCode)
+			if outcome.ExitCode != nil {
+				result.Err = fmt.Errorf("command %q failed with exit code %d", commandName, *outcome.ExitCode)
+			} else {
+				result.Err = fmt.Errorf("command %q failed", commandName)
+			}
 		}
 	case proc.StatusCancelled:
 		result.Status = StatusCancelled
@@ -166,8 +176,10 @@ func Run(ctx context.Context, step Step) Result {
 			result.Status = StatusCancelled
 		} else {
 			// A non-cancellation internal error (e.g. orphan cleanup on a
-			// normally-completed step could not be confirmed).
+			// normally-completed step could not be confirmed). The process did
+			// run to completion, so preserve its exit code (R-7).
 			result.Status = StatusFailed
+			result.ExitCode = outcome.ExitCode
 		}
 	}
 

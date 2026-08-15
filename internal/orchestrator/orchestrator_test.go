@@ -122,6 +122,46 @@ func TestRunCancellationReturnsCancelled(t *testing.T) {
 	}
 }
 
+func TestRunCancellationUnconfirmedReturnsInternalError(t *testing.T) {
+	repoRoot := t.TempDir()
+	pipelinePath := filepath.Join(repoRoot, "watt.yaml")
+	marker := filepath.Join(repoRoot, "started.marker")
+
+	pipeline := fmt.Sprintf("version: 1\npipelines:\n  default:\n    steps:\n      - name: slow\n        exec: '%s'\n        args:\n          - -test.run=TestOrchestratorHelperProcess\n        env:\n          WATT_ORCH_HELPER: '1'\n          WATT_ORCH_MARKER: '%s'\n", yamlQuote(os.Args[0]), yamlQuote(marker))
+	if err := os.WriteFile(pipelinePath, []byte(pipeline), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan Outcome, 1)
+	go func() {
+		outcome, _ := Run(Options{
+			RepoRoot:     repoRoot,
+			PipelinePath: pipelinePath,
+			Stdout:       io.Discard,
+			Stderr:       io.Discard,
+			Context:      ctx,
+			// Too short to confirm the termination, forcing internal_error.
+			ConfirmDeadline: time.Nanosecond,
+		})
+		done <- outcome
+	}()
+
+	waitForFile(t, marker, 10*time.Second)
+	cancel()
+
+	outcome := <-done
+	if outcome.Code != ExitInternalError {
+		t.Fatalf("exit code = %d, want %d", outcome.Code, ExitInternalError)
+	}
+	if outcome.Result.Status != "internal_error" {
+		t.Errorf("result status = %q, want %q", outcome.Result.Status, "internal_error")
+	}
+	if len(outcome.Result.Steps) != 1 || outcome.Result.Steps[0].Status != "cancelled" {
+		t.Errorf("steps = %#v, want one cancelled step", outcome.Result.Steps)
+	}
+}
+
 func yamlQuote(value string) string {
 	return strings.ReplaceAll(value, "'", "''")
 }

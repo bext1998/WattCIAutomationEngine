@@ -27,8 +27,8 @@ func TestRunExecutesAndForwardsOutput(t *testing.T) {
 	if outcome.Status != StatusExited {
 		t.Fatalf("status = %q, want %q; err = %v", outcome.Status, StatusExited, outcome.Err)
 	}
-	if outcome.ExitCode != 0 {
-		t.Errorf("exit code = %d, want 0", outcome.ExitCode)
+	if outcome.ExitCode == nil || *outcome.ExitCode != 0 {
+		t.Errorf("exit code = %v, want 0", outcome.ExitCode)
 	}
 	if stdout.String() != "proc-stdout" {
 		t.Errorf("stdout = %q, want %q", stdout.String(), "proc-stdout")
@@ -48,8 +48,8 @@ func TestRunReportsExitCode(t *testing.T) {
 	if outcome.Status != StatusExited {
 		t.Fatalf("status = %q, want %q; err = %v", outcome.Status, StatusExited, outcome.Err)
 	}
-	if outcome.ExitCode != 7 {
-		t.Errorf("exit code = %d, want 7", outcome.ExitCode)
+	if outcome.ExitCode == nil || *outcome.ExitCode != 7 {
+		t.Errorf("exit code = %v, want 7", outcome.ExitCode)
 	}
 }
 
@@ -79,8 +79,8 @@ func TestProc_NoOrphansOnNormalCompletion(t *testing.T) {
 	if outcome.Status != StatusExited {
 		t.Fatalf("status = %q, want %q; err = %v", outcome.Status, StatusExited, outcome.Err)
 	}
-	if outcome.ExitCode != 0 {
-		t.Errorf("exit code = %d, want 0", outcome.ExitCode)
+	if outcome.ExitCode == nil || *outcome.ExitCode != 0 {
+		t.Errorf("exit code = %v, want 0", outcome.ExitCode)
 	}
 
 	_, grandchild := readPIDs(t, pidFile)
@@ -141,6 +141,30 @@ func TestExitCode_InternalErrorOnUnconfirmedCancellation(t *testing.T) {
 		t.Fatalf("status = %q, want %q", outcome.Status, StatusInternalError)
 	}
 	waitForProcessGone(t, helper)
+	waitForProcessGone(t, grandchild)
+}
+
+func TestRunNormalCompletionCleanupTimeoutPreservesExitCode(t *testing.T) {
+	pidFile := filepath.Join(t.TempDir(), "pids")
+
+	// The helper exits normally with code 5, but leaves an orphan grandchild
+	// that cannot be cleaned within the (shrunk) deadline.
+	outcome := Run(context.Background(), Spec{
+		Path: os.Args[0],
+		Args: []string{"-test.run=TestProcHelperProcess"},
+		Env:  helperEnv("spawn_sleeper_exit", "WATT_PROC_EXIT=5", "WATT_PROC_PIDFILE="+pidFile),
+		// Too short to confirm the orphan cleanup, forcing the fallback.
+		ConfirmDeadline: time.Nanosecond,
+	})
+
+	if outcome.Status != StatusInternalError {
+		t.Fatalf("status = %q, want %q; err = %v", outcome.Status, StatusInternalError, outcome.Err)
+	}
+	if outcome.ExitCode == nil || *outcome.ExitCode != 5 {
+		t.Errorf("exit code = %v, want 5", outcome.ExitCode)
+	}
+
+	_, grandchild := readPIDs(t, pidFile)
 	waitForProcessGone(t, grandchild)
 }
 
@@ -218,6 +242,11 @@ func TestProcHelperProcess(t *testing.T) {
 		grandchild := spawnSleeper()
 		writePIDs(os.Getpid(), grandchild)
 		os.Exit(0)
+	case "spawn_sleeper_exit":
+		grandchild := spawnSleeper()
+		writePIDs(os.Getpid(), grandchild)
+		code, _ := strconv.Atoi(os.Getenv("WATT_PROC_EXIT"))
+		os.Exit(code)
 	case "spawn_sleeper_and_sleep":
 		grandchild := spawnSleeper()
 		writePIDs(os.Getpid(), grandchild)

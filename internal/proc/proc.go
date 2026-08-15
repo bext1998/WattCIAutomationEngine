@@ -47,7 +47,7 @@ type Spec struct {
 // Outcome is the result of a proc.Run invocation.
 type Outcome struct {
 	Status   Status
-	ExitCode int  // valid only when Status == StatusExited
+	ExitCode *int // non-nil when the process started and reported an exit code
 	NotFound bool // valid only when Status == StatusStartFailed
 	Err      error
 }
@@ -103,7 +103,7 @@ func Run(ctx context.Context, spec Spec) Outcome {
 	}
 
 	cancelled := false
-	exitCode := 0
+	var exitCode *int
 	for {
 		if ctx.Err() != nil {
 			cancelled = true
@@ -129,7 +129,8 @@ func Run(ctx context.Context, spec Spec) Outcome {
 				job.close()
 				return Outcome{Status: StatusInternalError, Err: fmt.Errorf("get exit code: %w", err)}
 			}
-			exitCode = int(code)
+			captured := int(code)
+			exitCode = &captured
 			break
 		}
 	}
@@ -145,10 +146,10 @@ func Run(ctx context.Context, spec Spec) Outcome {
 	started.closeIO()
 
 	if confirmErr != nil {
-		return Outcome{Status: StatusInternalError, Err: confirmErr}
+		return Outcome{Status: StatusInternalError, ExitCode: exitCode, Err: confirmErr}
 	}
 	if !confirmed {
-		return Outcome{Status: StatusInternalError, Err: errors.New("job object did not become empty within the confirmation deadline")}
+		return Outcome{Status: StatusInternalError, ExitCode: exitCode, Err: errors.New("job object did not become empty within the confirmation deadline")}
 	}
 	if cancelled {
 		return Outcome{Status: StatusCancelled}
