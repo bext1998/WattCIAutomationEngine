@@ -2,12 +2,15 @@ package orchestrator
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bext1998/WattCIAutomationEngine/internal/result"
 )
@@ -79,4 +82,70 @@ func TestRunMissingPwshReturnsEnvironmentUnavailable(t *testing.T) {
 	if len(outcome.Result.Steps) != 1 || outcome.Result.Steps[0].Status != "environment_unavailable" {
 		t.Errorf("steps = %#v, want one environment_unavailable step", outcome.Result.Steps)
 	}
+}
+
+func TestRunCancellationReturnsCancelled(t *testing.T) {
+	repoRoot := t.TempDir()
+	pipelinePath := filepath.Join(repoRoot, "watt.yaml")
+	marker := filepath.Join(repoRoot, "started.marker")
+
+	pipeline := fmt.Sprintf("version: 1\npipelines:\n  default:\n    steps:\n      - name: slow\n        exec: '%s'\n        args:\n          - -test.run=TestOrchestratorHelperProcess\n        env:\n          WATT_ORCH_HELPER: '1'\n          WATT_ORCH_MARKER: '%s'\n", yamlQuote(os.Args[0]), yamlQuote(marker))
+	if err := os.WriteFile(pipelinePath, []byte(pipeline), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan Outcome, 1)
+	go func() {
+		outcome, _ := Run(Options{
+			RepoRoot:     repoRoot,
+			PipelinePath: pipelinePath,
+			Stdout:       io.Discard,
+			Stderr:       io.Discard,
+			Context:      ctx,
+		})
+		done <- outcome
+	}()
+
+	waitForFile(t, marker, 10*time.Second)
+	cancel()
+
+	outcome := <-done
+	if outcome.Code != ExitCancelled {
+		t.Fatalf("exit code = %d, want %d", outcome.Code, ExitCancelled)
+	}
+	if outcome.Result.Status != "cancelled" {
+		t.Errorf("result status = %q, want %q", outcome.Result.Status, "cancelled")
+	}
+	if len(outcome.Result.Steps) != 1 || outcome.Result.Steps[0].Status != "cancelled" {
+		t.Errorf("steps = %#v, want one cancelled step", outcome.Result.Steps)
+	}
+}
+
+func yamlQuote(value string) string {
+	return strings.ReplaceAll(value, "'", "''")
+}
+
+func waitForFile(t *testing.T, path string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("file %q not created within %s", path, timeout)
+}
+
+func TestOrchestratorHelperProcess(t *testing.T) {
+	if os.Getenv("WATT_ORCH_HELPER") != "1" {
+		return
+	}
+	if marker := os.Getenv("WATT_ORCH_MARKER"); marker != "" {
+		_ = os.WriteFile(marker, []byte("started"), 0o644)
+		time.Sleep(60 * time.Second)
+		os.Exit(0)
+	}
+	os.Exit(0)
 }

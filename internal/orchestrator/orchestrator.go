@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -22,6 +23,7 @@ const (
 	ExitStepFailed             ExitCode = 1
 	ExitInvalidPipeline        ExitCode = 2
 	ExitEnvironmentUnavailable ExitCode = 3
+	ExitCancelled              ExitCode = 4
 	ExitInternalError          ExitCode = 5
 )
 
@@ -31,6 +33,7 @@ type Options struct {
 	PipelineName string
 	Stdout       io.Writer
 	Stderr       io.Writer
+	Context      context.Context
 }
 
 type Outcome struct {
@@ -39,6 +42,16 @@ type Outcome struct {
 }
 
 func Run(options Options) (Outcome, error) {
+	ctx := options.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	// Cancellation before load/validate: no result.json may be written (§4.2).
+	if ctx.Err() != nil {
+		return Outcome{Code: ExitCancelled}, nil
+	}
+
 	repoRoot := options.RepoRoot
 	if repoRoot == "" {
 		var err error
@@ -91,11 +104,29 @@ func Run(options Options) (Outcome, error) {
 		},
 	}
 
+	// Cancellation after load+validate but before any step: write an empty
+	// cancelled result (§4.2).
+	if ctx.Err() != nil {
+		final.Status = "cancelled"
+		final.DurationMs = time.Since(startedAt).Milliseconds()
+		if err := result.Write(filepath.Join(repoRoot, ".watt", "result.json"), final); err != nil {
+			return Outcome{Code: ExitInternalError, Result: final}, err
+		}
+		return Outcome{Code: ExitCancelled, Result: final}, nil
+	}
+
 	code := ExitSuccess
 	var failure error
 	for _, step := range selected.Steps {
+		// Cancellation between steps: do not start the next step (§4.2).
+		if ctx.Err() != nil {
+			final.Status = "cancelled"
+			code = ExitCancelled
+			break
+		}
+
 		stepStartedAt := time.Now()
-		runResult := runner.Run(runner.Step{
+		runResult := runner.Run(ctx, runner.Step{
 			RepoRoot:    repoRoot,
 			Name:        step.Name,
 			Exec:        step.Exec,
@@ -122,6 +153,13 @@ func Run(options Options) (Outcome, error) {
 			},
 		})
 
+		if runResult.InternalErr != nil {
+			final.Status = "internal_error"
+			code = ExitInternalError
+			failure = runResult.InternalErr
+			break
+		}
+
 		switch runResult.Status {
 		case runner.StatusSuccess:
 			continue
@@ -133,6 +171,9 @@ func Run(options Options) (Outcome, error) {
 			final.Status = "failed"
 			code = ExitStepFailed
 			failure = runResult.Err
+		case runner.StatusCancelled:
+			final.Status = "cancelled"
+			code = ExitCancelled
 		default:
 			final.Status = "internal_error"
 			code = ExitInternalError

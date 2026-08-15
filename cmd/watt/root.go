@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -137,11 +138,16 @@ func newRootCommand() *cobra.Command {
 			if len(args) == 1 {
 				pipelineName = args[0]
 			}
+
+			ctx, stop := signal.NotifyContext(command.Context(), os.Interrupt)
+			defer stop()
+
 			outcome, err := orchestrator.Run(orchestrator.Options{
 				RepoRoot:     repoRoot,
 				PipelineName: pipelineName,
 				Stdout:       command.OutOrStdout(),
 				Stderr:       command.ErrOrStderr(),
+				Context:      ctx,
 			})
 			if err != nil {
 				return &exitError{code: int(outcome.Code), err: err}

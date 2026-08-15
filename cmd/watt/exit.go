@@ -6,6 +6,7 @@ const (
 	EXIT_INVALID_PIPELINE        = 2
 	EXIT_USAGE                   = EXIT_INVALID_PIPELINE
 	EXIT_ENVIRONMENT_UNAVAILABLE = 3
+	EXIT_CANCELLED               = 4
 	EXIT_INTERNAL_ERROR          = 5
 )
 

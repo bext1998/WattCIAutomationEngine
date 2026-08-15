@@ -2,7 +2,7 @@ package runner
 
 import (
 	"bytes"
-	"errors"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -12,16 +12,19 @@ import (
 	"unicode/utf8"
 
 	"github.com/bext1998/WattCIAutomationEngine/internal/env"
+	"github.com/bext1998/WattCIAutomationEngine/internal/proc"
 )
 
 const maxOutputTailBytes = 8192
 
+// Status is the step-level status reported by a single step execution.
 type Status string
 
 const (
 	StatusSuccess                Status = "success"
 	StatusFailed                 Status = "failed"
 	StatusEnvironmentUnavailable Status = "environment_unavailable"
+	StatusCancelled              Status = "cancelled"
 )
 
 // Step is the execution-time input for one pipeline step.
@@ -52,9 +55,16 @@ type Result struct {
 	ResolvedCommand string
 	OutputTail      OutputTail
 	Err             error
+
+	// InternalErr is non-nil when the step itself finished in a way that must
+	// escalate the pipeline's top-level status to "internal_error" (for
+	// example, a cancelled process tree that could not be confirmed terminated
+	// within the deadline). The step-level Status still follows the step status
+	// enum (cancelled / failed); InternalErr is what the orchestrator consults.
+	InternalErr error
 }
 
-func Run(step Step) Result {
+func Run(ctx context.Context, step Step) Result {
 	result := Result{
 		Name: step.Name,
 		OutputTail: OutputTail{
@@ -93,17 +103,16 @@ func Run(step Step) Result {
 			commandArgs = shellArgs(step.Shell, step.Run)
 		}
 		commandPath = resolvedShell
+	} else {
+		resolved, err := exec.LookPath(step.Exec)
+		if err != nil {
+			result.Status = StatusEnvironmentUnavailable
+			result.Err = fmt.Errorf("command %q is unavailable: %w", commandName, err)
+			return result
+		}
+		commandPath = resolved
 	}
 
-	command := exec.Command(commandPath, commandArgs...)
-	command.Env = environmentEntries(effectiveEnvironment)
-	command.Dir = env.ResolveCwd(step.RepoRoot, step.Cwd)
-
-	if command.Err != nil {
-		result.Status = StatusEnvironmentUnavailable
-		result.Err = fmt.Errorf("command %q is unavailable: %w", commandName, command.Err)
-		return result
-	}
 	result.ResolvedCommand = strings.Join(append([]string{commandName}, commandArgs...), " ")
 
 	stdoutTail := &tailBuffer{}
@@ -116,34 +125,52 @@ func Run(step Step) Result {
 	if stderr == nil {
 		stderr = io.Discard
 	}
-	command.Stdout = io.MultiWriter(stdout, stdoutTail)
-	command.Stderr = io.MultiWriter(stderr, stderrTail)
 
-	if err := command.Start(); err != nil {
-		result.Status = StatusFailed
-		if errors.Is(err, exec.ErrNotFound) {
-			result.Status = StatusEnvironmentUnavailable
-			result.Err = fmt.Errorf("command %q is unavailable: %w", commandName, err)
-		} else {
-			result.Err = fmt.Errorf("start command %q: %w", commandName, err)
-		}
-		result.OutputTail = OutputTail{Stdout: stdoutTail.String(), Stderr: stderrTail.String()}
-		return result
-	}
+	outcome := proc.Run(ctx, proc.Spec{
+		Path:   commandPath,
+		Args:   commandArgs,
+		Env:    environmentEntries(effectiveEnvironment),
+		Dir:    env.ResolveCwd(step.RepoRoot, step.Cwd),
+		Stdout: io.MultiWriter(stdout, stdoutTail),
+		Stderr: io.MultiWriter(stderr, stderrTail),
+	})
 
-	err := command.Wait()
 	result.OutputTail = OutputTail{Stdout: stdoutTail.String(), Stderr: stderrTail.String()}
-	if command.ProcessState != nil {
-		exitCode := command.ProcessState.ExitCode()
+
+	switch outcome.Status {
+	case proc.StatusStartFailed:
+		if outcome.NotFound {
+			result.Status = StatusEnvironmentUnavailable
+			result.Err = fmt.Errorf("command %q is unavailable: %w", commandName, outcome.Err)
+		} else {
+			result.Status = StatusFailed
+			result.Err = fmt.Errorf("start command %q: %w", commandName, outcome.Err)
+		}
+	case proc.StatusExited:
+		exitCode := outcome.ExitCode
 		result.ExitCode = &exitCode
-	}
-	if err != nil {
-		result.Status = StatusFailed
-		result.Err = fmt.Errorf("command %q failed: %w", commandName, err)
-		return result
+		if exitCode == 0 {
+			result.Status = StatusSuccess
+		} else {
+			result.Status = StatusFailed
+			result.Err = fmt.Errorf("command %q failed with exit code %d", commandName, exitCode)
+		}
+	case proc.StatusCancelled:
+		result.Status = StatusCancelled
+	case proc.StatusInternalError:
+		result.InternalErr = outcome.Err
+		if ctx.Err() != nil {
+			// The step was cancelled but its tree could not be confirmed
+			// terminated; the step stays "cancelled" (R-7) and the pipeline
+			// escalates to internal_error via InternalErr.
+			result.Status = StatusCancelled
+		} else {
+			// A non-cancellation internal error (e.g. orphan cleanup on a
+			// normally-completed step could not be confirmed).
+			result.Status = StatusFailed
+		}
 	}
 
-	result.Status = StatusSuccess
 	return result
 }
 
