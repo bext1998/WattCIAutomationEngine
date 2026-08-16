@@ -8,7 +8,7 @@
 - 專案名稱：Watt
 - 目標工具：Claude Code；Codex 可參與規格審查、實作與 closeout 文件同步
 - 建立日期：2026-08-08
-- 目前狀態：`in-progress`；Issue #2、#3、#4、#5、#6、#7、#8、#24 已完成，下一個未完成前線為 Issue #9
+- 目前狀態：`in-progress`；Issue #2、#3、#4、#5、#6、#7、#8、#9、#24（Phase 1 Must Have）已完成；目前沒有已解除阻塞的 P0，下一步方向待使用者確認（見 NEXT_ACTION.md）
 - 最後同步：2026-08-16
 
 ## 文件
@@ -30,12 +30,12 @@
 - Repository：bext1998/WattCIAutomationEngine（https://github.com/bext1998/WattCIAutomationEngine）
 - Issue tracking：enabled
 - Spec to Issues：enabled
-- Priority label convention：repo 目前無 P0–P4 或同義標籤，需新建（見 spec-to-issues Dry Run 的新增標籤建議）
+- Priority label convention：repo 已建立 P0–P4 標籤（先前「無標籤」記錄已過期，於 spec-to-issues 建立 Issue #29～#32 時新建）
 - Category label convention：repo 現有 bug／documentation／enhancement／duplicate／good first issue／help wanted／invalid／question／wontfix；優先比對既有標籤
 - Default assignee policy：每次執行 spec-to-issues 時詢問（本人／不指派／逐項／指定帳號）
 - Allow label creation：待各次執行時於 Dry Run 取得確認
-- Current delivery：Issue #2、#3、#4、#5、#6、#7、#8、#24 已關閉；PR #21、#22、#23、#25、#26、#27、#28、#33 已合併；Parent Issue #1 與下一個 P0 Issue #9 仍開啟
-- CI／QA evidence：repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），已在 PR #25～#28、#33 與 main push 各成功執行一次；仍沒有獨立 QA 報告
+- Current delivery：Issue #2、#3、#4、#5、#6、#7、#8、#9、#24（Phase 1 Must Have 全數）已關閉；PR #21、#22、#23、#25、#26、#27、#28、#33、#34 已合併；Parent Issue #1 仍開啟，目前沒有已解除阻塞的 P0；P1 候選前線為 Issue #29～#31（對抗式審查回溯）
+- CI／QA evidence：repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），已在 PR #25～#28、#33、#34 與 main push 各成功執行一次；仍沒有獨立 QA 報告
 
 ## 備注
 

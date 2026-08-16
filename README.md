@@ -6,9 +6,9 @@ Watt 的核心定位是「消費者 → Watt」：Watt 不認知 Taylor、看板
 
 ## 目前狀態
 
-目前 repository 已合併 Issue #2～#8、#24：包含 Go module、Cobra CLI 入口、Windows/amd64 build 設定、pipeline strict decode／靜態驗證、env/cwd 基礎能力、`watt check --env` 環境探測，以及 `watt run` 的 exec／shell（pwsh、cmd）Step 執行核心路徑與 Windows Job Object 綁定、Ctrl+C cancellation。`watt --version`、`watt --help`、`watt check`、`watt check --env` 可使用；`watt run [pipeline]` 已能執行 `exec` 與 `run`（shell）兩種型別 step（default／具名 pipeline 選取、fail-fast、result.json 產出、exit code 判定），每個 step 皆綁定 Job Object，Ctrl+C 會終止整棵 process tree；environment redaction 仍待後續 Issue，尚不可作為正式 validation gate。
+Phase 1 Must Have（`docs/spec.md` §5.1）已全數完成：repository 已合併 Issue #2～#9、#24，包含 Go module、Cobra CLI 入口、Windows/amd64 build 設定、pipeline strict decode／靜態驗證、env/cwd 基礎能力、`watt check --env` 環境探測、`watt run` 的 exec／shell（pwsh、cmd）Step 執行核心路徑、Windows Job Object 綁定與 Ctrl+C cancellation，以及 `result.json` 的 environment 診斷區塊與已知環境值 redaction。`watt --version`、`watt --help`、`watt check`、`watt check --env`、`watt run [pipeline]` 皆可使用；每個 step 皆綁定 Job Object，Ctrl+C 會終止整棵 process tree；`resolved_command`／`output_tail` 序列化前會遮罩已知環境值，`environment` 區塊僅含名稱／OS／arch／shell 版本／工具路徑，不含任何環境變數值。
 
-功能規格位於 [`docs/spec.md`](docs/spec.md)，目前為 v1.3 Review 狀態。下一階段是 [Issue #9](https://github.com/bext1998/WattCIAutomationEngine/issues/9) 的 Environment Diagnostics 與已知環境值 Redaction。
+功能規格位於 [`docs/spec.md`](docs/spec.md)，目前為 v1.3 Review 狀態。Phase 1 Sub-issue 全數完成後，下一步方向待確認（見 [`NEXT_ACTION.md`](NEXT_ACTION.md)）；目前優先級最高的候選項目是 [Issue #29](https://github.com/bext1998/WattCIAutomationEngine/issues/29) 對抗式審查回溯（回顧 Issue #6／#4／#3 已合併程式碼）。
 
 ## 技術條件
 
@@ -58,7 +58,7 @@ watt check
 watt check --env
 ```
 
-目前 `check` 已只做 pipeline 靜態驗證，不啟動任何 step；`check --env` 會額外探測全部 pipeline／step 的 exec 目標與所需 shell（pwsh／cmd）是否可在 PATH 解析，缺失時回 `EXIT_ENVIRONMENT_UNAVAILABLE` 並列出缺項，同樣不啟動任何 process、不寫 result.json。`run` 已依 pipeline 定義循序執行 `exec` 與 `run`（shell：pwsh／cmd）兩種型別 step（fail-fast、result.json 產出），每個 step 皆綁定 Windows Job Object；Ctrl+C 會終止整棵 process tree，5 秒內確認清空回 `EXIT_CANCELLED`，確認不了回 `EXIT_INTERNAL_ERROR`（不謊報 cancelled）。
+目前 `check` 已只做 pipeline 靜態驗證，不啟動任何 step；`check --env` 會額外探測全部 pipeline／step 的 exec 目標與所需 shell（pwsh／cmd）是否可在 PATH 解析，缺失時回 `EXIT_ENVIRONMENT_UNAVAILABLE` 並列出缺項，同樣不啟動任何 process、不寫 result.json。`run` 已依 pipeline 定義循序執行 `exec` 與 `run`（shell：pwsh／cmd）兩種型別 step（fail-fast、result.json 產出），每個 step 皆綁定 Windows Job Object；Ctrl+C 會終止整棵 process tree，5 秒內確認清空回 `EXIT_CANCELLED`，確認不了回 `EXIT_INTERNAL_ERROR`（不謊報 cancelled）；`result.json` 額外含 `environment` 診斷區塊，`resolved_command`／`output_tail` 序列化前已遮罩已知環境值。
 
 ## Pipeline 目標格式
 
@@ -107,9 +107,9 @@ cmd/watt → internal/orchestrator → internal/pipeline
 - `internal/orchestrator`：pipeline 選取、循序執行、fail-fast 與結果決策（已實作，含 cancellation 的三個 context 檢查點）
 - `internal/pipeline`：YAML 載入、資料模型與靜態驗證（已實作）
 - `internal/runner`：單一步驟執行（exec／shell 兩種模式）、輸出擷取與狀態判定（已實作）
-- `internal/env`：host → pipeline → step 的環境合併與 cwd 解析、exec／shell PATH 探測（已實作）
+- `internal/env`：host → pipeline → step 的環境合併與 cwd 解析、exec／shell PATH 探測、environment diagnostics 產出與已知值 redaction（已實作）
 - `internal/proc`：Windows Job Object 綁定、process tree 終止與 cancellation 確認（已實作）
-- `internal/result`：Result 組裝、序列化與寫入（已實作；environment redaction 待 #9）
+- `internal/result`：Result 組裝、序列化與寫入（已實作）
 
 模組依賴只能由上而下，Watt 不得反向依賴 Taylor 或其他上層消費者。
 
@@ -118,7 +118,7 @@ cmd/watt → internal/orchestrator → internal/pipeline
 - `docs/spec.md` 是功能、架構與驗收標準的權威來源。
 - §7 `[FROZEN]` 契約不得在未經 spec revision 的情況下變更。
 - Phase 1 維持循序執行與 fail-fast，不預作平行 step、timeout、matrix 或 sandbox 功能。
-- Issue #2～#8、#24 已合併；目前工作前線是 [Issue #9](https://github.com/bext1998/WattCIAutomationEngine/issues/9)。
+- Issue #2～#9、#24（Phase 1 Must Have）已合併；下一步方向待確認，見 [`NEXT_ACTION.md`](NEXT_ACTION.md)。
 - 修改前請先閱讀 [`NEXT_ACTION.md`](NEXT_ACTION.md) 與相關 spec 章節。
 
 ## License

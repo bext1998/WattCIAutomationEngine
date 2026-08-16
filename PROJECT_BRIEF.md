@@ -1,7 +1,7 @@
 # Watt — 專案說明
 
 > 建立日期：2026-08-08
-> 最後更新：2026-08-16
+> 最後更新：2026-08-16（Issue #9 完成，Phase 1 Must Have 全數落地）
 
 ---
 
@@ -63,4 +63,5 @@ Watt 解決兩個相鄰但不同的問題：
 - Issue #6 已完成：`watt run`／`watt run <pipeline>` 的 Exec Step 執行核心路徑（default／具名 pipeline 選取、fail-fast、result.json 產出、exit code 判定）；PR #27 已合併。
 - Issue #24 已完成：新增 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），PR #25 已合併；CI 已在 PR／main push 各成功執行一次，但仍沒有獨立 QA 報告。`cmd`、`pipeline`、`env` 已有針對性測試檔。
 - Issue #7 已完成：`watt run` 的 Shell Step 執行（`pwsh`／`cmd`）；PR #28 已合併（經對抗式審查修正一輪後才合併）。
-- Issue #8 已完成：Windows Job Object 綁定、Ctrl+C 安全終止整棵 process tree、cleanup 確認與 `EXIT_CANCELLED`／`EXIT_INTERNAL_ERROR` 判定；PR #33 已合併。environment diagnostics／redaction 仍是後續工作（Issue #9）。
+- Issue #8 已完成：Windows Job Object 綁定、Ctrl+C 安全終止整棵 process tree、cleanup 確認與 `EXIT_CANCELLED`／`EXIT_INTERNAL_ERROR` 判定；PR #33 已合併。
+- Issue #9 已完成：`result.json` 的 `environment` 診斷區塊（os/arch/shell_available/resolved_tools/env_var_names，僅名稱不含值）與 `resolved_command`／`output_tail` 已知環境值遮罩；PR #34 已合併（先跑過一輪對抗式審查抓到 pwsh timeout 與遮罩重疊值兩個真問題，修正後才合併）。至此 Phase 1 Must Have（§5.1）全數完成。
