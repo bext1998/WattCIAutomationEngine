@@ -84,6 +84,53 @@ func TestRunMissingPwshReturnsEnvironmentUnavailable(t *testing.T) {
 	}
 }
 
+func TestEnvDiagnostics_NoValuesLeaked(t *testing.T) {
+	const canary = "orchestrator-secret-canary"
+	repoRoot := t.TempDir()
+	pipelinePath := filepath.Join(repoRoot, "watt.yaml")
+	pipeline := fmt.Sprintf("version: 1\npipelines:\n  default:\n    steps:\n      - name: canary\n        exec: '%s'\n        args:\n          - -test.run=TestOrchestratorHelperProcess\n        env:\n          WATT_ORCH_HELPER: '1'\n", yamlQuote(os.Args[0]))
+	if err := os.WriteFile(pipelinePath, []byte(pipeline), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("WATT_ORCH_CANARY", canary)
+
+	var stdout bytes.Buffer
+	outcome, err := Run(Options{
+		RepoRoot:     repoRoot,
+		PipelinePath: pipelinePath,
+		Stdout:       &stdout,
+		Stderr:       io.Discard,
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if outcome.Code != ExitSuccess {
+		t.Fatalf("exit code = %d, want %d", outcome.Code, ExitSuccess)
+	}
+	if !strings.Contains(stdout.String(), canary) {
+		t.Errorf("stdout = %q, want unredacted canary", stdout.String())
+	}
+
+	contents, err := os.ReadFile(filepath.Join(repoRoot, ".watt", "result.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(contents, []byte(canary)) {
+		t.Errorf("result.json contains canary: %s", contents)
+	}
+
+	var written result.Result
+	if err := json.Unmarshal(contents, &written); err != nil {
+		t.Fatal(err)
+	}
+	if len(written.Environment.ShellAvailable) != 3 {
+		t.Errorf("shell_available = %#v, want pwsh/cmd/bash diagnostics", written.Environment.ShellAvailable)
+	}
+	if !contains(written.Environment.EnvVarNames, "WATT_ORCH_CANARY") {
+		t.Errorf("env_var_names = %#v, want WATT_ORCH_CANARY", written.Environment.EnvVarNames)
+	}
+}
+
 func TestRunCancellationReturnsCancelled(t *testing.T) {
 	repoRoot := t.TempDir()
 	pipelinePath := filepath.Join(repoRoot, "watt.yaml")
@@ -178,9 +225,22 @@ func waitForFile(t *testing.T, path string, timeout time.Duration) {
 	t.Fatalf("file %q not created within %s", path, timeout)
 }
 
+func contains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestOrchestratorHelperProcess(t *testing.T) {
 	if os.Getenv("WATT_ORCH_HELPER") != "1" {
 		return
+	}
+	if canary := os.Getenv("WATT_ORCH_CANARY"); canary != "" {
+		fmt.Fprint(os.Stdout, canary)
+		os.Exit(0)
 	}
 	if marker := os.Getenv("WATT_ORCH_MARKER"); marker != "" {
 		_ = os.WriteFile(marker, []byte("started"), 0o644)

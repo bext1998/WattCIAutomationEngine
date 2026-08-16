@@ -143,6 +143,9 @@ func Run(ctx context.Context, step Step) Result {
 	})
 
 	result.OutputTail = OutputTail{Stdout: stdoutTail.String(), Stderr: stderrTail.String()}
+	result.ResolvedCommand = env.RedactKnownValues(result.ResolvedCommand, effectiveEnvironment)
+	result.OutputTail.Stdout = env.RedactKnownValues(result.OutputTail.Stdout, effectiveEnvironment)
+	result.OutputTail.Stderr = env.RedactKnownValues(result.OutputTail.Stderr, effectiveEnvironment)
 
 	switch outcome.Status {
 	case proc.StatusStartFailed:

@@ -219,6 +219,40 @@ func TestMissingPwsh_NoFallbackTo51(t *testing.T) {
 	}
 }
 
+func TestResult_OutputTail_RedactsKnownEnvValues(t *testing.T) {
+	const canary = "runner-secret-canary"
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	got := Run(context.Background(), Step{
+		Name: "redaction",
+		Exec: os.Args[0],
+		Args: []string{"-test.run=TestRunnerHelperProcess", canary},
+		HostEnv: environmentFromEntries(append(os.Environ(),
+			"WATT_RUNNER_HELPER=1",
+			"WATT_RUNNER_CANARY="+canary,
+		)),
+		Stdout: &stdout,
+		Stderr: &stderr,
+	})
+
+	if got.Status != StatusSuccess {
+		t.Fatalf("status = %q, want %q; error = %v", got.Status, StatusSuccess, got.Err)
+	}
+	for name, text := range map[string]string{
+		"resolved command": got.ResolvedCommand,
+		"stdout tail":      got.OutputTail.Stdout,
+		"stderr tail":      got.OutputTail.Stderr,
+	} {
+		if strings.Contains(text, canary) {
+			t.Errorf("%s = %q, must not contain canary", name, text)
+		}
+	}
+	if !strings.Contains(stdout.String(), canary) || !strings.Contains(stderr.String(), canary) {
+		t.Errorf("passthrough stdout/stderr = %q/%q, want unredacted canary", stdout.String(), stderr.String())
+	}
+}
+
 func TestRunReportsCwdFailureWithoutExitCode(t *testing.T) {
 	got := Run(context.Background(), Step{
 		Exec: os.Args[0],
@@ -279,6 +313,11 @@ func TestRunnerHelperProcess(t *testing.T) {
 	}
 	if os.Getenv("WATT_RUNNER_LARGE") == "1" {
 		fmt.Fprint(os.Stdout, strings.Repeat("x", 9000)+"尾端")
+		os.Exit(0)
+	}
+	if canary := os.Getenv("WATT_RUNNER_CANARY"); canary != "" {
+		fmt.Fprint(os.Stdout, canary)
+		fmt.Fprint(os.Stderr, canary)
 		os.Exit(0)
 	}
 	fmt.Fprint(os.Stdout, "stdout")

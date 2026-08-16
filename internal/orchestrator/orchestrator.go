@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bext1998/WattCIAutomationEngine/internal/env"
 	"github.com/bext1998/WattCIAutomationEngine/internal/pipeline"
 	"github.com/bext1998/WattCIAutomationEngine/internal/result"
 	"github.com/bext1998/WattCIAutomationEngine/internal/runner"
@@ -96,6 +97,8 @@ func Run(options Options) (Outcome, error) {
 		return Outcome{Code: ExitInvalidPipeline}, missingPipelineError(pipelineName, definition.Pipelines)
 	}
 
+	diagnostics := env.ProbeDiagnostics(runtime.GOOS, runtime.GOARCH, selectedExecTools(selected))
+
 	startedAt := time.Now()
 	final := result.Result{
 		SchemaVersion: result.SchemaVersion,
@@ -105,8 +108,11 @@ func Run(options Options) (Outcome, error) {
 		StartedAt:     startedAt.Format(time.RFC3339Nano),
 		WattVersion:   "dev",
 		Environment: result.Environment{
-			OS:   runtime.GOOS,
-			Arch: runtime.GOARCH,
+			OS:             diagnostics.OS,
+			Arch:           diagnostics.Arch,
+			ShellAvailable: diagnostics.ShellAvailable,
+			ResolvedTools:  diagnostics.ResolvedTools,
+			EnvVarNames:    diagnostics.EnvVarNames,
 		},
 	}
 
@@ -195,6 +201,23 @@ func Run(options Options) (Outcome, error) {
 		return Outcome{Code: ExitInternalError, Result: final}, err
 	}
 	return Outcome{Code: code, Result: final}, failure
+}
+
+func selectedExecTools(selected pipeline.Pipeline) []string {
+	seen := make(map[string]struct{})
+	for _, step := range selected.Steps {
+		if strings.TrimSpace(step.Exec) == "" {
+			continue
+		}
+		seen[step.Exec] = struct{}{}
+	}
+
+	tools := make([]string, 0, len(seen))
+	for tool := range seen {
+		tools = append(tools, tool)
+	}
+	sort.Strings(tools)
+	return tools
 }
 
 func missingPipelineError(name string, pipelines map[string]pipeline.Pipeline) error {
