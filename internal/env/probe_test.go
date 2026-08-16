@@ -23,6 +23,24 @@ func TestResolveExecutable_ResolvesCommand(t *testing.T) {
 	}
 }
 
+func TestResolveExecutable_UsesPATHEXT(t *testing.T) {
+	binDir := t.TempDir()
+	commandPath := filepath.Join(binDir, "watt-probe.cmd")
+	if err := os.WriteFile(commandPath, []byte("@echo off\r\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir)
+	t.Setenv("PATHEXT", ".COM;.EXE;.BAT;.CMD")
+
+	path, err := ResolveExecutable("watt-probe")
+	if err != nil {
+		t.Fatalf("ResolveExecutable() error = %v", err)
+	}
+	if !strings.EqualFold(path, commandPath) {
+		t.Errorf("ResolveExecutable() = %q, want %q", path, commandPath)
+	}
+}
+
 func TestResolveExecutable_MissingNameIncludesErrorContext(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	const name = "watt-test-resolve-executable-missing"

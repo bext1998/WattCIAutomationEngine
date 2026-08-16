@@ -44,3 +44,29 @@ func TestEnvMerge_StepOverridesPipelineOverridesHost(t *testing.T) {
 		})
 	}
 }
+
+func TestEnvMerge_CaseVariantKeysAcrossLayersRespectPrecedence(t *testing.T) {
+	got := Merge(
+		map[string]string{"path": "host"},
+		map[string]string{"PATH": "pipeline"},
+		map[string]string{"Path": "step"},
+	)
+	want := map[string]string{"PATH": "step"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Merge() = %#v, want %#v", got, want)
+	}
+}
+
+func TestEnvMerge_CaseVariantKeysInSameLayerHaveStableWinner(t *testing.T) {
+	layer := map[string]string{
+		"PATH": "upper",
+		"Path": "title",
+	}
+
+	for iteration := 0; iteration < 1000; iteration++ {
+		got := Merge(layer, nil, nil)
+		if got["PATH"] != "title" {
+			t.Fatalf("iteration %d: Merge() = %#v, want deterministic lexical winner title", iteration, got)
+		}
+	}
+}
