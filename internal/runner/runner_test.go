@@ -2,14 +2,17 @@ package runner
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 )
 
@@ -17,7 +20,7 @@ func TestRunExecStepStartsTargetDirectly(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	got := Run(Step{
+	got := Run(context.Background(), Step{
 		Name:    "probe",
 		Exec:    os.Args[0],
 		Args:    []string{"-test.run=TestRunnerHelperProcess", "--", "direct"},
@@ -47,7 +50,7 @@ func TestRunExecStepStartsTargetDirectly(t *testing.T) {
 }
 
 func TestRunReportsEnvironmentUnavailableWithoutExitCode(t *testing.T) {
-	got := Run(Step{Exec: "watt-runner-command-that-does-not-exist"})
+	got := Run(context.Background(), Step{Exec: "watt-runner-command-that-does-not-exist"})
 
 	if got.Status != StatusEnvironmentUnavailable {
 		t.Fatalf("status = %q, want %q; error = %v", got.Status, StatusEnvironmentUnavailable, got.Err)
@@ -70,7 +73,7 @@ func TestShellStep_CmdSupport(t *testing.T) {
 	t.Setenv("TEMP", tempDir)
 	t.Setenv("TMP", tempDir)
 
-	got := Run(Step{
+	got := Run(context.Background(), Step{
 		Name:   "cmd",
 		Shell:  "cmd",
 		Run:    "echo cmd stdout\necho cmd stderr 1>&2\n",
@@ -105,7 +108,7 @@ func TestShellStep_PwshSupport(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	got := Run(Step{
+	got := Run(context.Background(), Step{
 		Name:   "pwsh",
 		Shell:  "pwsh",
 		Run:    "Write-Output 'pwsh stdout'; [Console]::Error.Write('pwsh stderr')",
@@ -134,7 +137,7 @@ func TestShellStep_PwshSupport(t *testing.T) {
 }
 
 func TestShellStep_PwshFailureReportsExitCode(t *testing.T) {
-	got := Run(Step{
+	got := Run(context.Background(), Step{
 		Name:  "pwsh-failure",
 		Shell: "pwsh",
 		Run:   "exit 3",
@@ -154,7 +157,7 @@ func TestShellStep_CmdMultilineFailureReportsExitCode(t *testing.T) {
 	t.Setenv("TEMP", tempDir)
 	t.Setenv("TMP", tempDir)
 
-	got := Run(Step{
+	got := Run(context.Background(), Step{
 		Name:   "cmd-failure",
 		Shell:  "cmd",
 		Run:    "echo step-one\necho step-two\nexit 7\n",
@@ -195,7 +198,7 @@ func TestMissingPwsh_NoFallbackTo51(t *testing.T) {
 
 	host := environmentFromEntries(os.Environ())
 	host["WATT_RUNNER_FALLBACK_MARKER"] = marker
-	got := Run(Step{
+	got := Run(context.Background(), Step{
 		Name:    "missing-pwsh",
 		Shell:   "pwsh",
 		Run:     "Write-Output should-not-run",
@@ -217,7 +220,7 @@ func TestMissingPwsh_NoFallbackTo51(t *testing.T) {
 }
 
 func TestRunReportsCwdFailureWithoutExitCode(t *testing.T) {
-	got := Run(Step{
+	got := Run(context.Background(), Step{
 		Exec: os.Args[0],
 		Cwd:  filepath.Join(t.TempDir(), "does-not-exist"),
 	})
@@ -237,7 +240,7 @@ func TestRunReportsCwdFailureWithoutExitCode(t *testing.T) {
 }
 
 func TestRunKeepsOutputTailWithinUtf8ByteLimit(t *testing.T) {
-	got := Run(Step{
+	got := Run(context.Background(), Step{
 		Exec:    os.Args[0],
 		Args:    []string{"-test.run=TestRunnerHelperProcess"},
 		HostEnv: environmentFromEntries(append(os.Environ(), "WATT_RUNNER_HELPER=1", "WATT_RUNNER_LARGE=1")),
@@ -261,6 +264,19 @@ func TestRunnerHelperProcess(t *testing.T) {
 	if os.Getenv("WATT_RUNNER_HELPER") != "1" {
 		return
 	}
+	switch os.Getenv("WATT_RUNNER_MODE") {
+	case "sleep":
+		time.Sleep(60 * time.Second)
+		os.Exit(0)
+	case "spawn_sleeper_exit":
+		_ = os.Setenv("WATT_RUNNER_MODE", "sleep")
+		command := exec.Command(os.Args[0], "-test.run=TestRunnerHelperProcess")
+		if err := command.Start(); err != nil {
+			os.Exit(2)
+		}
+		code, _ := strconv.Atoi(os.Getenv("WATT_RUNNER_EXIT"))
+		os.Exit(code)
+	}
 	if os.Getenv("WATT_RUNNER_LARGE") == "1" {
 		fmt.Fprint(os.Stdout, strings.Repeat("x", 9000)+"尾端")
 		os.Exit(0)
@@ -268,6 +284,31 @@ func TestRunnerHelperProcess(t *testing.T) {
 	fmt.Fprint(os.Stdout, "stdout")
 	fmt.Fprint(os.Stderr, "stderr")
 	os.Exit(0)
+}
+
+func TestRunReportsExitCodeOnCleanupTimeout(t *testing.T) {
+	got := Run(context.Background(), Step{
+		Name: "orphan",
+		Exec: os.Args[0],
+		Args: []string{"-test.run=TestRunnerHelperProcess"},
+		HostEnv: environmentFromEntries(append(os.Environ(),
+			"WATT_RUNNER_HELPER=1",
+			"WATT_RUNNER_MODE=spawn_sleeper_exit",
+			"WATT_RUNNER_EXIT=5",
+		)),
+		// Too short to confirm the orphan cleanup, forcing the fallback.
+		ConfirmDeadline: time.Nanosecond,
+	})
+
+	if got.InternalErr == nil {
+		t.Fatal("InternalErr = nil, want non-nil")
+	}
+	if got.Status != StatusFailed {
+		t.Errorf("status = %q, want %q", got.Status, StatusFailed)
+	}
+	if got.ExitCode == nil || *got.ExitCode != 5 {
+		t.Errorf("exit code = %v, want 5", got.ExitCode)
+	}
 }
 
 func environmentFromEntries(entries []string) map[string]string {
