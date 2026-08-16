@@ -1,6 +1,9 @@
 package env
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
 
 // Merge combines host, pipeline, and step environment overrides in order of
 // increasing precedence.
@@ -8,8 +11,15 @@ func Merge(host, pipelineOverride, stepOverride map[string]string) map[string]st
 	merged := make(map[string]string, len(host)+len(pipelineOverride)+len(stepOverride))
 
 	mergeLayer := func(layer map[string]string) {
-		for key, value := range layer {
-			merged[strings.ToUpper(key)] = value
+		// A single layer may contain case variants of the same Windows
+		// environment key. Sort before normalizing so their tie-break is stable.
+		keys := make([]string, 0, len(layer))
+		for key := range layer {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			merged[strings.ToUpper(key)] = layer[key]
 		}
 	}
 
