@@ -260,14 +260,14 @@ func (buffer *tailBuffer) Write(data []byte) (int, error) {
 }
 
 func (buffer *tailBuffer) String() string {
-	data := buffer.data
-	if len(data) > maxOutputTailBytes {
-		data = data[len(data)-maxOutputTailBytes:]
+	data := bytes.ToValidUTF8(buffer.data, []byte("\uFFFD"))
+	if len(data) <= maxOutputTailBytes {
+		return string(data)
 	}
-	data = bytes.ToValidUTF8(data, []byte("\uFFFD"))
-	for len(data) > maxOutputTailBytes {
+
+	data = data[len(data)-maxOutputTailBytes:]
+	for len(data) > 0 && !utf8.RuneStart(data[0]) {
 		data = data[1:]
-		data = bytes.ToValidUTF8(data, []byte("\uFFFD"))
 	}
 	return string(data)
 }

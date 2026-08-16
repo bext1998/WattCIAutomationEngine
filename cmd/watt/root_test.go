@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -113,13 +114,30 @@ func TestResult_PartialOnFailure(t *testing.T) {
 }
 
 func TestExecStep_NoShellIndirection(t *testing.T) {
-	code, stdout, stderr, got := runFixture(t, "", pipelineWithSteps(helperStep("direct", 0)))
-
-	if code != EXIT_SUCCESS || got.Status != "success" {
-		t.Fatalf("code = %d, status = %q, stdout = %q, stderr = %q", code, got.Status, stdout, stderr)
+	argvPath := filepath.Join(t.TempDir(), "argv")
+	helper := buildArgvHelper(t)
+	args := []string{"&", "|", ">", "$(WATT_NOT_A_COMMAND)", "contains spaces"}
+	var argumentLines strings.Builder
+	for _, arg := range args {
+		fmt.Fprintf(&argumentLines, "          - '%s'\n", yamlSingleQuote(arg))
 	}
-	if !strings.Contains(stdout, "stdout") || !strings.Contains(stderr, "stderr") {
-		t.Fatalf("direct exec output missing: stdout=%q stderr=%q", stdout, stderr)
+	pipeline := fmt.Sprintf("version: 1\npipelines:\n  default:\n    steps:\n      - name: direct\n        exec: '%s'\n        args:\n%s        env:\n          WATT_ARGV_PATH: '%s'\n", yamlSingleQuote(helper), argumentLines.String(), yamlSingleQuote(argvPath))
+
+	code, _, stderr, got := runFixture(t, "", pipeline)
+	if code != EXIT_SUCCESS || got.Status != "success" {
+		t.Fatalf("code = %d, status = %q, stderr = %q", code, got.Status, stderr)
+	}
+
+	contents, err := os.ReadFile(argvPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotArgs := strings.Split(string(contents), "\x00")
+	if len(gotArgs) == 0 {
+		t.Fatal("helper received no arguments")
+	}
+	if !reflect.DeepEqual(gotArgs[1:], args) {
+		t.Errorf("helper args = %#v, want %#v", gotArgs[1:], args)
 	}
 }
 
@@ -143,6 +161,65 @@ func TestResult_ExitCodeNullOnEnvironmentUnavailable(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "watt-command-that-does-not-exist") {
 		t.Errorf("stderr = %q, want missing command name", stderr)
+	}
+}
+
+func TestRun_FailFastStopsAfterCwdFailure(t *testing.T) {
+	missingCwd := filepath.Join(t.TempDir(), "missing")
+	thirdStepMarker := filepath.Join(t.TempDir(), "third-step-argv")
+	contents := pipelineWithSteps(
+		helperStep("first", 0),
+		fmt.Sprintf("      - name: cwd\n        exec: '%s'\n        args:\n          - -test.run=TestRunHelperProcess\n        env:\n          WATT_RUN_HELPER: '1'\n        cwd: '%s'\n", yamlSingleQuote(os.Args[0]), yamlSingleQuote(missingCwd)),
+		fmt.Sprintf("      - name: third\n        exec: '%s'\n        args:\n          - -test.run=TestRunHelperProcess\n        env:\n          WATT_RUN_HELPER: '1'\n          WATT_RUN_ARGV_PATH: '%s'\n", yamlSingleQuote(os.Args[0]), yamlSingleQuote(thirdStepMarker)),
+	)
+
+	code, _, stderr, got := runFixture(t, "", contents)
+	if code != EXIT_STEP_FAILED || got.Status != "failed" {
+		t.Fatalf("code = %d, status = %q, stderr = %q", code, got.Status, stderr)
+	}
+	if len(got.Steps) != 2 || got.Steps[0].Status != "success" || got.Steps[1].Status != "failed" {
+		t.Fatalf("steps = %#v, want successful first and failed cwd step only", got.Steps)
+	}
+	if got.Steps[1].ExitCode != nil || got.Steps[1].OutputTail != (result.OutputTail{}) {
+		t.Errorf("cwd step = %#v, want null exit code and empty output", got.Steps[1])
+	}
+	if _, err := os.Stat(thirdStepMarker); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("third step marker exists or could not be checked: %v", err)
+	}
+}
+
+func TestRun_ResultWriteFailureReturnsInternalError(t *testing.T) {
+	workdir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workdir, "watt.yaml"), []byte(pipelineWithSteps(helperStep("success", 0))), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workdir, ".watt"), []byte("blocks result directory"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	oldWorkingDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(oldWorkingDirectory); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+
+	command := newRootCommand()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.SetOut(&stdout)
+	command.SetErr(&stderr)
+	command.SetArgs([]string{"run"})
+	if got := execute(command); got != EXIT_INTERNAL_ERROR {
+		t.Fatalf("exit code = %d, want %d; stderr = %q", got, EXIT_INTERNAL_ERROR, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "create result directory") {
+		t.Errorf("stderr = %q, want result write failure", stderr.String())
 	}
 }
 
@@ -201,6 +278,31 @@ func runFixture(t *testing.T, pipelineName, contents string) (int, string, strin
 	return code, stdout.String(), stderr.String(), got
 }
 
+func buildArgvHelper(t *testing.T) string {
+	t.Helper()
+	directory := t.TempDir()
+	source := filepath.Join(directory, "main.go")
+	binary := filepath.Join(directory, "argv-helper.exe")
+	contents := `package main
+
+import (
+	"os"
+	"strings"
+)
+
+func main() {
+	_ = os.WriteFile(os.Getenv("WATT_ARGV_PATH"), []byte(strings.Join(os.Args, "\x00")), 0o644)
+}
+`
+	if err := os.WriteFile(source, []byte(contents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := exec.Command("go", "build", "-o", binary, source).CombinedOutput(); err != nil {
+		t.Fatalf("build argv helper: %v\n%s", err, output)
+	}
+	return binary
+}
+
 func pipelineWithSteps(steps ...string) string {
 	return "version: 1\npipelines:\n  default:\n    steps:\n" + strings.Join(steps, "")
 }
@@ -221,6 +323,9 @@ func indent(value string, spaces int) string {
 func TestRunHelperProcess(t *testing.T) {
 	if os.Getenv("WATT_RUN_HELPER") != "1" {
 		return
+	}
+	if argvPath := os.Getenv("WATT_RUN_ARGV_PATH"); argvPath != "" {
+		_ = os.WriteFile(argvPath, []byte(strings.Join(os.Args, "\x00")), 0o644)
 	}
 	fmt.Fprint(os.Stdout, "stdout")
 	fmt.Fprint(os.Stderr, "stderr")
