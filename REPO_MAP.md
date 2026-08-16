@@ -2,7 +2,7 @@
 
 > 產出日期：2026-08-10
 > 工具：Codex（maze-repo-map）
-> 最後更新：2026-08-12（Issue #2～#5、#24 / PR #21～#23、#25、#26 合併後）
+> 最後更新：2026-08-16（Issue #2～#8、#24 / PR #21～#23、#25～#28、#33 合併後）
 
 ---
 
@@ -38,7 +38,7 @@ WattCIAutomationEngine/
     root.go              — cobra root command、run／check（含 --env 環境探測）子命令
     exit.go              — exit code 常數與 exitError 型別
     root_test.go         — CLI 行為測試
-  internal/              — 六個核心 package（pipeline、env 已有基礎實作，其餘仍為骨架）
+  internal/              — 六個核心 package，全部已有實作
   scripts/build.ps1      — Windows/amd64、CGO_ENABLED=0 build script
   .git/                  — Git metadata
 ```
@@ -46,12 +46,12 @@ WattCIAutomationEngine/
 `internal/` 各 package 的目前職責與實作狀態：
 
 ```
-internal/orchestrator/   — 規劃中的 pipeline 選取、循序執行、fail-fast、exit code（骨架）
+internal/orchestrator/   — pipeline 選取、循序執行、fail-fast、exit code（已實作，含 cancellation 三個 ctx 檢查點）
 internal/pipeline/       — YAML 載入、資料模型、靜態驗證（已實作）
-internal/runner/         — 規劃中的單一步驟執行、輸出擷取與狀態判定（骨架）
-internal/result/         — 規劃中的 result 組裝、序列化與寫入（骨架）
+internal/runner/         — 單一步驟執行（exec／shell 兩種模式）、輸出擷取與狀態判定（已實作）
+internal/result/         — result 組裝、序列化與寫入（已實作；environment redaction 待 #9）
 internal/env/            — host → pipeline → step env 合併與 cwd 解析、exec／shell PATH 探測（已實作）
-internal/proc/           — 規劃中的 Windows Job Object 與 process tree 管理（骨架）
+internal/proc/           — Windows Job Object 綁定、process tree 管理與 cancellation（已實作：job.go／proc.go／process.go）
 ```
 
 ---
@@ -67,9 +67,10 @@ internal/proc/           — 規劃中的 Windows Job Object 與 process tree �
 | `internal/pipeline/pipeline.go` | strict YAML 載入、預設 shell 與靜態驗證 |
 | `internal/env/merge.go`、`internal/env/cwd.go` | 三層 env 合併與 step cwd 解析 |
 | `internal/env/probe.go` | `ResolveExecutable`：包 `exec.LookPath`，供 `watt check --env` 探測 exec／shell 是否可解析 |
-| `internal/orchestrator/orchestrator.go` | pipeline 選取、循序 fail-fast、result 組裝與 exit code 決定（Issue #6） |
-| `internal/runner/runner.go` | Exec 模式直接啟動、即時輸出透傳、output_tail、env/cwd 解析（Issue #6） |
+| `internal/orchestrator/orchestrator.go` | pipeline 選取、循序 fail-fast、result 組裝與 exit code 決定；含 Ctrl+C 對應的三個 context 檢查點（Issue #6、#8） |
+| `internal/runner/runner.go` | exec／shell（pwsh、cmd）兩種模式啟動、即時輸出透傳、output_tail、env/cwd 解析（Issue #6、#7） |
 | `internal/result/result.go` | Result／Step schema 落地、序列化與 `.watt/result.json` 寫入（Issue #6） |
+| `internal/proc/job.go`、`internal/proc/proc.go`、`internal/proc/process.go` | Windows Job Object 建立與綁定（`CREATE_SUSPENDED` 後才 `ResumeThread`）、`TerminateJobObject` 終止整棵 process tree、cleanup 確認與 5 秒期限（A-10）兜底（Issue #8） |
 | `scripts/build.ps1` | Windows/amd64、`CGO_ENABLED=0`、`-trimpath` build；以 `-X main.version` 注入版本 |
 | `DECISIONS.md` | 規格狀態與重大設計決策的索引 |
 | `AGENTS.md` | 核心不可違反規則與 Routing Table；詳細規範按任務類型路由至 `docs/spec.md` 或 `docs/agent-rules/*.md` |
@@ -88,7 +89,7 @@ internal/proc/           — 規劃中的 Windows Job Object 與 process tree �
 
 - **啟動方式**：目前可使用 `watt --version`、`watt --help`、`watt check`、`watt check --env`、`watt run [pipeline]`。
 - **主要進入點**：`cmd/watt/main.go` 的 `main()`；實際邏輯在 `execute()`，回傳 exit code 交給 `os.Exit`。
-- **目前行為**：`watt --version` 輸出版本；`watt` 印 help；`check` 載入並 strict decode／靜態驗證 repo root 的 `watt.yaml`，不啟動 step；`check --env` 額外遍歷全部 pipeline／step，探測 `exec` 目標與 `run` 所需 shell（pwsh／cmd）是否可在 PATH 解析，缺失時回 `EXIT_ENVIRONMENT_UNAVAILABLE`（3）並列出缺項，不啟動任何 process、不寫 result.json；`run [pipeline]` 依 default／具名 pipeline 選取後循序 fail-fast 執行 `exec` 型 step，即時透傳 stdout/stderr 並寫出 `.watt/result.json`，`run` 型（shell）step 仍回報未實作失敗；usage error（未知命令／旗標／多餘參數）回 2。
+- **目前行為**：`watt --version` 輸出版本；`watt` 印 help；`check` 載入並 strict decode／靜態驗證 repo root 的 `watt.yaml`，不啟動 step；`check --env` 額外遍歷全部 pipeline／step，探測 `exec` 目標與 `run` 所需 shell（pwsh／cmd）是否可在 PATH 解析，缺失時回 `EXIT_ENVIRONMENT_UNAVAILABLE`（3）並列出缺項，不啟動任何 process、不寫 result.json；`run [pipeline]` 依 default／具名 pipeline 選取後循序 fail-fast 執行 `exec` 與 `run`（shell：pwsh／cmd）兩種型別 step，每個 step 皆綁定 Windows Job Object 後才啟動使用者程式碼，即時透傳 stdout/stderr 並寫出 `.watt/result.json`；Ctrl+C 會終止整棵 process tree，5 秒內確認清空回 `EXIT_CANCELLED`（4），確認不了回 `EXIT_INTERNAL_ERROR`（5，不謊報 cancelled）；`environment` 診斷區塊與已知環境值 redaction 仍待 Issue #9；usage error（未知命令／旗標／多餘參數）回 2。
 
 ---
 
@@ -104,21 +105,24 @@ internal/proc/           — 規劃中的 Windows Job Object 與 process tree �
 
 ## 測試
 
-- **測試檔案**：`cmd/watt/root_test.go`（CLI、`run`／`check`／`check --env` 端到端、無副作用／失敗路徑、usage error、help 與 `exitError`）；`internal/pipeline/pipeline_test.go`（載入與靜態驗證）；`internal/env/*_test.go`（env 合併、cwd 解析與 `ResolveExecutable` PATH 探測）；`internal/runner/runner_test.go`（Exec 啟動、output_tail、cwd／command 失敗）；`internal/result/result_test.go`（Result schema 序列化）。
-- **執行測試**：`go test ./...`；本次 closeout 未新增執行 QA，repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），已在 PR #25、#26、#27 與 main push 各成功執行一次，但仍沒有獨立 QA 報告。
+- **測試檔案**：`cmd/watt/root_test.go`（CLI、`run`／`check`／`check --env` 端到端、無副作用／失敗路徑、usage error、help 與 `exitError`）；`internal/pipeline/pipeline_test.go`（載入與靜態驗證）；`internal/env/*_test.go`（env 合併、cwd 解析與 `ResolveExecutable` PATH 探測）；`internal/runner/runner_test.go`（exec／shell 啟動、output_tail、cwd／command 失敗）；`internal/result/result_test.go`（Result schema 序列化）；`internal/proc/proc_test.go`（Job Object 綁定、`TestCancel_KillsDescendantProcesses`、`TestProc_NoOrphansOnNormalCompletion`、`TestExitCode_InternalErrorOnUnconfirmedCancellation`）；`internal/orchestrator/orchestrator_test.go`（含 `TestRunCancellationReturnsCancelled` 端到端）。
+- **執行測試**：`go test ./...`；本次 closeout 未新增執行 QA，repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），已在 PR #25～#28、#33 與 main push 各成功執行一次，但仍沒有獨立 QA 報告；取消相關時序敏感測試另跑過 `-count=3` 確認穩定（本機驗證，未進 CI）。
 
 ---
 
 ## 設定
 
 - **環境設定**：`go.mod`／`go.sum` 已建立；尚無 `.env` 或 `watt.yaml`。
-- **關鍵設定項**：規格定義 pipeline 預設檔案為 repo root 的 `watt.yaml`，結果預設寫入 `.watt/result.json`；pipeline 載入／驗證與 result 寫入（Issue #6）皆已完成，`environment` 診斷區塊與已知環境值 redaction 待 Issue #9。
+- **關鍵設定項**：規格定義 pipeline 預設檔案為 repo root 的 `watt.yaml`，結果預設寫入 `.watt/result.json`；pipeline 載入／驗證、exec／shell step 執行與 result 寫入（Issue #6、#7、#8）皆已完成，`environment` 診斷區塊與已知環境值 redaction 待 Issue #9。
+- **新增依賴**：`golang.org/x/sys/windows`（Issue #8 引入；標準庫不提供 Job Object API，`os.Process` 也不對外公開子行程原生 handle，無法在不繞過 `exec.Cmd` 的情況下滿足 P-1 時序要求）。
 
 ---
 
 ## 目前未知項目
 
-- Issue #6（Exec Step／`watt run`）已完成並關閉（PR #27）；Issue #9（Environment Diagnostics／已知環境值 Redaction）已解除前置阻塞，是目前工作前線；#7（Shell Step）、#8（Job Object／cancellation）為 P1，亦已解除前置阻塞。
+- Issue #6（Exec Step）、#7（Shell Step）、#8（Job Object／cancellation）皆已完成並關閉（PR #27、#28、#33）；Issue #9（Environment Diagnostics／已知環境值 Redaction，P0）已解除前置阻塞，是目前唯一工作前線。
 - `watt.yaml` 尚未納入 repository；目前只能透過測試或外部工作目錄提供 pipeline 定義驗證 `watt check`／`watt run`。
-- repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），已在 PR #25、#26、#27 與 main push 各成功執行一次；仍沒有獨立 QA 報告。目前 GitHub 的 #21～#23、#25～#27 PR 已合併，可引用其 CI 執行紀錄作為 rollup。
-- PR #27（Issue #6）審查留下的非阻擋技術債（詳見 [PR #27 留言](https://github.com/bext1998/WattCIAutomationEngine/pull/27#issuecomment-5285418121) 與 `NEXT_ACTION.md`）：`orchestrator.WattVersion` 寫死 `"dev"`、`resolved_command` 空白 join 對含空白參數失真、Run-mode 失敗訊息未帶 step 名稱、`result.Write` 失敗時吞掉原始 step 錯誤，以及三項測試缺口。
+- repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），已在 PR #25～#28、#33 與 main push 各成功執行一次；仍沒有獨立 QA 報告。
+- Issue #8／PR #33 已知驗證缺口：AC-6 checkbox 關閉當下未勾選——取消流程以 `context` cancellation 模擬 Ctrl+C（語意等價），未實際發送 OS 層級 Ctrl+C 訊號端到端驗證，CI 也未針對取消情境跑專門驗證（僅本機 Windows 手動測過）；詳見 `NEXT_ACTION.md`。
+- PR #27（Issue #6）審查留下的非阻擋技術債（詳見 [PR #27 留言](https://github.com/bext1998/WattCIAutomationEngine/pull/27#issuecomment-5285418121) 與 `NEXT_ACTION.md`）：`orchestrator.WattVersion` 寫死 `"dev"`、`resolved_command` 空白 join 對含空白參數失真、Run-mode 失敗訊息未帶 step 名稱、`result.Write` 失敗時吞掉原始 step 錯誤，以及三項測試缺口；PR #28（Issue #7）留下的非阻擋觀察（`TestMissingPwsh_NoFallbackTo51` 覆蓋不足、`runner.shellArgs()` 防禦深度缺口）同樣尚未處理。
+- 對抗式審查回溯已建立追蹤（[Issue #29](https://github.com/bext1998/WattCIAutomationEngine/issues/29) 總覽 ＋ Sub-issue #30／#31／#32），範圍已定案但尚未開始執行。
