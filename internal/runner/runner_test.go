@@ -294,6 +294,30 @@ func TestRunKeepsOutputTailWithinUtf8ByteLimit(t *testing.T) {
 	}
 }
 
+func TestRunKeepsOutputTailValidAtMultibyteBoundary(t *testing.T) {
+	got := Run(context.Background(), Step{
+		Exec: os.Args[0],
+		Args: []string{"-test.run=TestRunnerHelperProcess"},
+		HostEnv: environmentFromEntries(append(os.Environ(),
+			"WATT_RUNNER_HELPER=1",
+			"WATT_RUNNER_BOUNDARY=1",
+		)),
+	})
+
+	if got.Status != StatusSuccess {
+		t.Fatalf("status = %q, want %q; error = %v", got.Status, StatusSuccess, got.Err)
+	}
+	if len([]byte(got.OutputTail.Stdout)) > maxOutputTailBytes {
+		t.Fatalf("stdout tail bytes = %d, want <= %d", len([]byte(got.OutputTail.Stdout)), maxOutputTailBytes)
+	}
+	if !utf8.ValidString(got.OutputTail.Stdout) {
+		t.Fatal("stdout tail is not valid UTF-8")
+	}
+	if want := strings.Repeat("y", 8190); got.OutputTail.Stdout != want {
+		t.Errorf("stdout tail does not retain the valid tail after a split multibyte rune")
+	}
+}
+
 func TestRunnerHelperProcess(t *testing.T) {
 	if os.Getenv("WATT_RUNNER_HELPER") != "1" {
 		return
@@ -313,6 +337,10 @@ func TestRunnerHelperProcess(t *testing.T) {
 	}
 	if os.Getenv("WATT_RUNNER_LARGE") == "1" {
 		fmt.Fprint(os.Stdout, strings.Repeat("x", 9000)+"尾端")
+		os.Exit(0)
+	}
+	if os.Getenv("WATT_RUNNER_BOUNDARY") == "1" {
+		fmt.Fprint(os.Stdout, strings.Repeat("x", 8190)+"尾"+strings.Repeat("y", 8190))
 		os.Exit(0)
 	}
 	if canary := os.Getenv("WATT_RUNNER_CANARY"); canary != "" {
