@@ -149,6 +149,83 @@ func TestOutputPassthrough_RealtimeStdoutStderr(t *testing.T) {
 	}
 }
 
+func TestOutputJSON_StdoutCarriesOnlyFinalResult(t *testing.T) {
+	code, stdout, stderr, written := runFixtureWithArgs(t, "", pipelineWithSteps(helperStep("output", 0)), "--output", "json")
+	if code != EXIT_SUCCESS {
+		t.Fatalf("exit code = %d, want %d; stderr = %q", code, EXIT_SUCCESS, stderr)
+	}
+
+	var output result.Result
+	if err := json.Unmarshal([]byte(stdout), &output); err != nil {
+		t.Fatalf("stdout is not a JSON result: %v; stdout = %q", err, stdout)
+	}
+	if !reflect.DeepEqual(output, written) {
+		t.Errorf("stdout result = %#v, want written result %#v", output, written)
+	}
+	encoded, err := result.Marshal(written)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stdout != string(encoded) {
+		t.Errorf("stdout = %q, want only final result JSON %q", stdout, encoded)
+	}
+	if !strings.Contains(stderr, "stdout") {
+		t.Errorf("stderr = %q, want redirected step output", stderr)
+	}
+}
+
+func TestRun_OutputRejectsUnsupportedValue(t *testing.T) {
+	command := newRootCommand()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.SetOut(&stdout)
+	command.SetErr(&stderr)
+	command.SetArgs([]string{"run", "--output", "xml"})
+
+	if got, want := execute(command), EXIT_USAGE; got != want {
+		t.Errorf("exit code = %d, want %d", got, want)
+	}
+	if got := stdout.String(); got != "" {
+		t.Errorf("stdout = %q, want empty", got)
+	}
+	if got := stderr.String(); !strings.Contains(got, "--output") {
+		t.Errorf("stderr = %q, want unsupported output error", got)
+	}
+}
+
+func TestRun_OutputJSONInvalidPipelineWritesNoStdout(t *testing.T) {
+	workdir := t.TempDir()
+	oldWorkingDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(oldWorkingDirectory); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+
+	command := newRootCommand()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.SetOut(&stdout)
+	command.SetErr(&stderr)
+	command.SetArgs([]string{"run", "--output", "json"})
+
+	if got, want := execute(command), EXIT_INVALID_PIPELINE; got != want {
+		t.Errorf("exit code = %d, want %d", got, want)
+	}
+	if got := stdout.String(); got != "" {
+		t.Errorf("stdout = %q, want empty", got)
+	}
+	if got := stderr.String(); !strings.Contains(got, "watt.yaml") {
+		t.Errorf("stderr = %q, want pipeline path", got)
+	}
+}
+
 func TestResult_ExitCodeNullOnEnvironmentUnavailable(t *testing.T) {
 	contents := pipelineWithSteps("      - name: missing\n        exec: watt-command-that-does-not-exist\n")
 	code, _, stderr, got := runFixture(t, "", contents)
@@ -185,6 +262,46 @@ func TestRun_FailFastStopsAfterCwdFailure(t *testing.T) {
 	}
 	if _, err := os.Stat(thirdStepMarker); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("third step marker exists or could not be checked: %v", err)
+	}
+}
+
+func TestRun_OutputJSONWritesResultWhenResultFileWriteFails(t *testing.T) {
+	workdir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workdir, "watt.yaml"), []byte(pipelineWithSteps(helperStep("success", 0))), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workdir, ".watt"), []byte("blocks result directory"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	oldWorkingDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(oldWorkingDirectory); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+
+	command := newRootCommand()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.SetOut(&stdout)
+	command.SetErr(&stderr)
+	command.SetArgs([]string{"run", "--output", "json"})
+	if got := execute(command); got != EXIT_INTERNAL_ERROR {
+		t.Fatalf("exit code = %d, want %d; stderr = %q", got, EXIT_INTERNAL_ERROR, stderr.String())
+	}
+
+	var output result.Result
+	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
+		t.Fatalf("stdout is not a JSON result: %v; stdout = %q", err, stdout.String())
+	}
+	if output.Pipeline != "default" || output.Status != "success" {
+		t.Errorf("stdout result = %#v, want default successful result", output)
 	}
 }
 
@@ -237,6 +354,10 @@ func TestResult_ExitCodeNullOnCwdFailure(t *testing.T) {
 }
 
 func runFixture(t *testing.T, pipelineName, contents string) (int, string, string, result.Result) {
+	return runFixtureWithArgs(t, pipelineName, contents)
+}
+
+func runFixtureWithArgs(t *testing.T, pipelineName, contents string, extraArgs ...string) (int, string, string, result.Result) {
 	t.Helper()
 	workdir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(workdir, "watt.yaml"), []byte(contents), 0o644); err != nil {
@@ -264,6 +385,7 @@ func runFixture(t *testing.T, pipelineName, contents string) (int, string, strin
 	if pipelineName != "" {
 		args = append(args, pipelineName)
 	}
+	args = append(args, extraArgs...)
 	command.SetArgs(args)
 	code := execute(command)
 

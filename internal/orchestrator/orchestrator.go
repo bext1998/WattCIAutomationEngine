@@ -44,8 +44,9 @@ type Options struct {
 }
 
 type Outcome struct {
-	Code   ExitCode
-	Result result.Result
+	Code      ExitCode
+	Result    result.Result
+	Assembled bool
 }
 
 func Run(options Options) (Outcome, error) {
@@ -122,9 +123,9 @@ func Run(options Options) (Outcome, error) {
 		final.Status = "cancelled"
 		final.DurationMs = time.Since(startedAt).Milliseconds()
 		if err := result.Write(filepath.Join(repoRoot, ".watt", "result.json"), final); err != nil {
-			return Outcome{Code: ExitInternalError, Result: final}, err
+			return Outcome{Code: ExitInternalError, Result: final, Assembled: true}, err
 		}
-		return Outcome{Code: ExitCancelled, Result: final}, nil
+		return Outcome{Code: ExitCancelled, Result: final, Assembled: true}, nil
 	}
 
 	code := ExitSuccess
@@ -198,9 +199,9 @@ func Run(options Options) (Outcome, error) {
 
 	resultPath := filepath.Join(repoRoot, ".watt", "result.json")
 	if err := result.Write(resultPath, final); err != nil {
-		return Outcome{Code: ExitInternalError, Result: final}, err
+		return Outcome{Code: ExitInternalError, Result: final, Assembled: true}, err
 	}
-	return Outcome{Code: code, Result: final}, failure
+	return Outcome{Code: code, Result: final, Assembled: true}, failure
 }
 
 func selectedExecTools(selected pipeline.Pipeline) []string {
