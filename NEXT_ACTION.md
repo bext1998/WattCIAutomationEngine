@@ -4,7 +4,7 @@
 
 ## 目前狀態
 
-`completed`（本次 session 範圍）。Issue #32（Pipeline 資料模型與靜態驗證對抗式審查）已完成並關閉，PR #38 已合併（squash，commit `7af2adb`）。這次審查跑了兩輪：pi 第一輪修正 yaml.v3 對 `args`／`env`／step 字串欄位的 scalar coercion 問題（數字、布林值會被靜默轉型成字串，違反 §7.1 FROZEN 資料模型）；獨立 subagent 複審抓到第一輪修正本身引入的新問題——自我參照 YAML merge key（`<<: *self`）會造成無窮遞迴、觸發 Go runtime `fatal error: stack overflow`，是無法被 `recover()` 攔截的行程級當機，轉交 pi 修好（新增 `stringFieldValidator` 做 cycle 偵測）；PR 開出後又跑第三輪獨立 subagent 對 PR 整體做合併前把關審查（額外驗證 pipeline／env 層級的自我參照、間接雙節點循環、深巢狀效能懸崖），結論 go，CI 通過後合併。[Issue #29](https://github.com/bext1998/WattCIAutomationEngine/issues/29)（對抗式審查回溯總覽）三個 Sub-issue（#30／#31／#32）全數完成，已關閉。Parent [Issue #1](https://github.com/bext1998/WattCIAutomationEngine/issues/1)（Phase 1 MVP 整體追蹤）仍開啟。
+`completed`（本次 session 範圍）。[Issue #10](https://github.com/bext1998/WattCIAutomationEngine/issues/10)（`--output json` 旗標，§5.2 F-14）已完成並關閉，[PR #39](https://github.com/bext1998/WattCIAutomationEngine/pull/39) 已合併（squash，commit `9678b17`）。實作由 pi（Orca 派工）依 Claude Code 事先確認好的設計完成：`run` 新增 `--output json` 旗標，啟用時 step 即時輸出改導向 stderr、執行結束後把最終 result JSON 寫到真正的 stdout（含 result.json 寫檔失敗仍盡力吐 stdout 的邊界情況），`internal/orchestrator.Outcome` 新增 `Assembled` 欄位判斷是否已組出 result，`internal/result` 抽出共用的 `Marshal()`，未變動 §7.2 FROZEN schema。Issue AC 指定的 `TestOutputJSON_StdoutCarriesOnlyFinalResult` 已新增並通過；Claude Code 獨立重跑過 `go vet ./...`、`go test ./...`（全 7 個套件）確認無回歸；CI `build-and-test` 已通過。Parent [Issue #1](https://github.com/bext1998/WattCIAutomationEngine/issues/1)（Phase 1 MVP 整體追蹤）仍開啟。
 
 ## 下一個 Session 目標
 
@@ -26,12 +26,11 @@
 - PR #27（Issue #6）技術債：`orchestrator.WattVersion` 寫死 `"dev"`、`resolved_command` 空白 join 對含空白參數失真——已確認為低風險 diagnostic 顯示問題，可延後。
 - Issue #8 已知驗證缺口：AC-6 取消流程以 `context` cancellation 模擬 Ctrl+C（語意等價），未實際發送 OS 層級 Ctrl+C 訊號端到端驗證，CI 也未針對取消情境跑專門驗證。
 - Issue #9／PR #34 殘餘風險：pwsh 版本探測的 `WaitDelay` 修正保證探測呼叫本身會在期限內返回，但不會終止造成卡住的 wrapper 之 grandchild 行程本身，影響範圍小，暫不視為阻塞。
-- `docs/spec.md` §4.2 提到的 `--output json` 行為目前 repo 尚未實作，對應既有 [Issue #10](https://github.com/bext1998/WattCIAutomationEngine/issues/10)（P3，非阻塞，純記錄）。
 
 ## 權威連結
 
 - `docs\spec.md`（v1.3，Review）
 - [Parent Issue #1](https://github.com/bext1998/WattCIAutomationEngine/issues/1)（追蹤全部 Sub-issue 進度，以 GitHub 為工作狀態權威）
-- [PR #38](https://github.com/bext1998/WattCIAutomationEngine/pull/38)（最近合併：Pipeline 資料模型與靜態驗證對抗式審查，closes #32）
+- [PR #39](https://github.com/bext1998/WattCIAutomationEngine/pull/39)（最近合併：`--output json` 旗標，closes #10）
 - [Issue #37](https://github.com/bext1998/WattCIAutomationEngine/issues/37)（候選前線，P2／security）
 - [Issue #13](https://github.com/bext1998/WattCIAutomationEngine/issues/13)（候選前線，P2／ci，Dogfooding）
