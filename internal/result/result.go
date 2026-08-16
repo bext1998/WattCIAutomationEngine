@@ -43,12 +43,19 @@ type Environment struct {
 	EnvVarNames    []string          `json:"env_var_names,omitempty"`
 }
 
-func Write(path string, value Result) error {
+func Marshal(value Result) ([]byte, error) {
 	contents, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
-		return fmt.Errorf("marshal result: %w", err)
+		return nil, fmt.Errorf("marshal result: %w", err)
 	}
-	contents = append(contents, '\n')
+	return append(contents, '\n'), nil
+}
+
+func Write(path string, value Result) error {
+	contents, err := Marshal(value)
+	if err != nil {
+		return err
+	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("create result directory: %w", err)

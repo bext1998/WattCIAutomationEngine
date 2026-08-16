@@ -13,6 +13,7 @@ import (
 	"github.com/bext1998/WattCIAutomationEngine/internal/env"
 	"github.com/bext1998/WattCIAutomationEngine/internal/orchestrator"
 	"github.com/bext1998/WattCIAutomationEngine/internal/pipeline"
+	"github.com/bext1998/WattCIAutomationEngine/internal/result"
 )
 
 var version = "dev"
@@ -125,10 +126,15 @@ func newRootCommand() *cobra.Command {
 		},
 	}
 	check.Flags().BoolVar(&checkEnv, "env", false, "check required commands and shells in PATH")
+	var output string
 	run := &cobra.Command{
 		Use:  "run [pipeline]",
 		Args: runArgs,
 		RunE: func(command *cobra.Command, args []string) error {
+			if output != "" && output != "json" {
+				return wrapUsageError(fmt.Errorf("unsupported --output value %q; only \"json\" is supported", output))
+			}
+
 			repoRoot, err := os.Getwd()
 			if err != nil {
 				return &exitError{code: EXIT_INTERNAL_ERROR, err: fmt.Errorf("get repository root: %w", err)}
@@ -142,13 +148,28 @@ func newRootCommand() *cobra.Command {
 			ctx, stop := signal.NotifyContext(command.Context(), os.Interrupt)
 			defer stop()
 
+			stdout := command.OutOrStdout()
+			stderr := command.ErrOrStderr()
+			stepStdout := stdout
+			if output == "json" {
+				stepStdout = stderr
+			}
 			outcome, err := orchestrator.Run(orchestrator.Options{
 				RepoRoot:     repoRoot,
 				PipelineName: pipelineName,
-				Stdout:       command.OutOrStdout(),
-				Stderr:       command.ErrOrStderr(),
+				Stdout:       stepStdout,
+				Stderr:       stderr,
 				Context:      ctx,
 			})
+			if output == "json" && outcome.Assembled {
+				contents, marshalErr := result.Marshal(outcome.Result)
+				if marshalErr != nil {
+					return &exitError{code: EXIT_INTERNAL_ERROR, err: marshalErr}
+				}
+				if _, writeErr := stdout.Write(contents); writeErr != nil {
+					return &exitError{code: EXIT_INTERNAL_ERROR, err: fmt.Errorf("write JSON result to stdout: %w", writeErr)}
+				}
+			}
 			if err != nil {
 				return &exitError{code: int(outcome.Code), err: err}
 			}
@@ -158,6 +179,7 @@ func newRootCommand() *cobra.Command {
 			return nil
 		},
 	}
+	run.Flags().StringVar(&output, "output", "", "write the final result to stdout (json)")
 	command.AddCommand(
 		run,
 		check,
