@@ -1,10 +1,13 @@
 package pipeline
 
 import (
+	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestValidate_ExecAndRunBothSet(t *testing.T) {
@@ -88,6 +91,11 @@ func TestValidate_FieldModesAndShells(t *testing.T) {
 		wantError string
 	}{
 		{
+			name:      "whitespace shell with exec",
+			step:      Step{Name: "step", Exec: "tool", Shell: "  "},
+			wantError: "shell",
+		},
+		{
 			name:      "args with run",
 			step:      Step{Name: "step", Run: "echo hello", Args: []string{"unexpected"}},
 			wantError: "args",
@@ -162,14 +170,164 @@ func TestLoad_NullDocument(t *testing.T) {
 }
 
 func TestLoad_UnknownField(t *testing.T) {
-	path := writePipeline(t, "version: 1\nunknown: true\npipelines: {}\n")
-
-	_, err := Load(path)
-	if err == nil {
-		t.Fatal("Load() error = nil, want unknown field error")
+	tests := []struct {
+		name     string
+		contents string
+	}{
+		{
+			name:     "top level",
+			contents: "version: 1\nunknown: true\npipelines: {}\n",
+		},
+		{
+			name:     "pipeline",
+			contents: "version: 1\npipelines:\n  default:\n    steps: []\n    unknown: true\n",
+		},
+		{
+			name:     "step",
+			contents: "version: 1\npipelines:\n  default:\n    steps:\n      - name: build\n        exec: tool\n        unknown: true\n",
+		},
 	}
-	if !strings.Contains(err.Error(), "unknown") {
-		t.Errorf("Load() error = %q, want unknown field context", err)
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := Load(writePipeline(t, test.contents))
+			if err == nil {
+				t.Fatal("Load() error = nil, want unknown field error")
+			}
+			if !strings.Contains(err.Error(), "field") {
+				t.Errorf("Load() error = %q, want unknown field context", err)
+			}
+		})
+	}
+}
+
+func TestLoad_RejectsNonStringStringFields(t *testing.T) {
+	tests := []struct {
+		name     string
+		contents string
+		want     string
+	}{
+		{
+			name:     "steps string",
+			contents: "version: 1\npipelines:\n  default:\n    steps: not-a-list\n",
+			want:     "cannot unmarshal",
+		},
+		{
+			name:     "pipeline env list",
+			contents: "version: 1\nenv: [not-a-map]\npipelines: {}\n",
+			want:     "cannot unmarshal",
+		},
+		{
+			name:     "args number",
+			contents: "version: 1\npipelines:\n  default:\n    steps:\n      - name: build\n        exec: tool\n        args: [1]\n",
+			want:     "args",
+		},
+		{
+			name:     "pipeline env number",
+			contents: "version: 1\nenv: {ANSWER: 42}\npipelines: {}\n",
+			want:     "env value",
+		},
+		{
+			name:     "step env boolean",
+			contents: "version: 1\npipelines:\n  default:\n    steps:\n      - name: build\n        exec: tool\n        env: {CI: true}\n",
+			want:     "env value",
+		},
+		{
+			name:     "step name number",
+			contents: "version: 1\npipelines:\n  default:\n    steps:\n      - name: 1\n        exec: tool\n",
+			want:     "name",
+		},
+		{
+			name:     "pipeline name number",
+			contents: "version: 1\npipelines:\n 1:\n    steps: []\n",
+			want:     "pipeline name",
+		},
+		{
+			name:     "exec boolean",
+			contents: "version: 1\npipelines:\n  default:\n    steps:\n      - name: build\n        exec: true\n",
+			want:     "exec",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := Load(writePipeline(t, test.contents))
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("Load() error = %v, want type error containing %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestLoad_DuplicateVersionKeysRejected(t *testing.T) {
+	_, err := Load(writePipeline(t, "version: 1\nversion: bad\npipelines: {}\n"))
+	if err == nil || !strings.Contains(err.Error(), "already defined") {
+		t.Fatalf("Load() error = %v, want duplicate key error", err)
+	}
+}
+
+func TestLoad_MultiDocumentRejectsEmptyTrailingDocument(t *testing.T) {
+	for _, contents := range []string{
+		"version: 1\npipelines: {}\n---\n",
+		"version: 1\npipelines: {}\n---\n# intentionally empty\n\n",
+	} {
+		_, err := Load(writePipeline(t, contents))
+		if err == nil || !strings.Contains(err.Error(), "multiple YAML documents") {
+			t.Fatalf("Load() error = %v, want multiple document error", err)
+		}
+	}
+}
+
+func TestLoad_AnchorsAndMergesRemainStrict(t *testing.T) {
+	tests := []struct {
+		name     string
+		contents string
+		want     string
+	}{
+		{
+			name:     "merged unknown field",
+			contents: "version: 1\npipelines:\n  default:\n    steps:\n      - &template {unknown: value}\n      - <<: *template\n        name: build\n        exec: tool\n",
+			want:     "field unknown",
+		},
+		{
+			name:     "aliased numeric argument",
+			contents: "version: &number 1\npipelines:\n  default:\n    steps:\n      - name: build\n        exec: tool\n        args: [*number]\n",
+			want:     "args",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := Load(writePipeline(t, test.contents))
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("Load() error = %v, want error containing %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestLoad_CircularMergeKeyRejectedWithoutCrash(t *testing.T) {
+	const helperEnv = "WATT_PIPELINE_CIRCULAR_MERGE_HELPER"
+	contents := "version: 1\npipelines:\n  default:\n    steps:\n      - &step\n        name: build\n        exec: tool\n        <<: *step\n"
+
+	if os.Getenv(helperEnv) == "1" {
+		_, err := Load(writePipeline(t, contents))
+		if err == nil || !strings.Contains(err.Error(), "circular merge key reference") {
+			t.Fatalf("Load() error = %v, want circular merge key reference", err)
+		}
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestLoad_CircularMergeKeyRejectedWithoutCrash$", "-test.count=1")
+	command.Env = append(os.Environ(), helperEnv+"=1")
+	output, err := command.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("Load() did not reject circular merge key before timeout: %v\n%s", ctx.Err(), output)
+	}
+	if err != nil {
+		t.Fatalf("circular merge helper failed: %v\n%s", err, output)
 	}
 }
 

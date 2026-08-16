@@ -63,6 +63,9 @@ func Load(path string) (PipelineFile, error) {
 	if err := validateVersionType(&document); err != nil {
 		return PipelineFile{}, fmt.Errorf("load pipeline %q: %w", path, err)
 	}
+	if err := validateStringFieldTypes(&document); err != nil {
+		return PipelineFile{}, fmt.Errorf("load pipeline %q: %w", path, err)
+	}
 
 	decoder := yaml.NewDecoder(bytes.NewReader(contents))
 	decoder.KnownFields(true)
@@ -88,10 +91,7 @@ func isNullDocument(document *yaml.Node) bool {
 }
 
 func validateVersionType(document *yaml.Node) error {
-	root := document
-	if root.Kind == yaml.DocumentNode && len(root.Content) > 0 {
-		root = root.Content[0]
-	}
+	root := documentRoot(document)
 	if root.Kind != yaml.MappingNode {
 		return nil
 	}
@@ -101,10 +101,7 @@ func validateVersionType(document *yaml.Node) error {
 		if key.Value != "version" {
 			continue
 		}
-		version := root.Content[index+1]
-		if version.Kind == yaml.AliasNode && version.Alias != nil {
-			version = version.Alias
-		}
+		version := dereferenceAlias(root.Content[index+1])
 		if version.Tag != "!!int" {
 			return fmt.Errorf("version at line %d must be an integer", version.Line)
 		}
@@ -112,6 +109,224 @@ func validateVersionType(document *yaml.Node) error {
 	}
 
 	return nil
+}
+
+// validateStringFieldTypes prevents yaml.v3's scalar coercion from admitting
+// values outside the frozen data model, such as args: [1] for []string.
+func validateStringFieldTypes(document *yaml.Node) error {
+	root := documentRoot(document)
+	if root.Kind != yaml.MappingNode {
+		return nil
+	}
+
+	validator := stringFieldValidator{visiting: make(map[*yaml.Node]struct{})}
+	for index := 0; index+1 < len(root.Content); index += 2 {
+		switch root.Content[index].Value {
+		case "env":
+			if err := validator.validateStringMap(root.Content[index+1], "env"); err != nil {
+				return err
+			}
+		case "pipelines":
+			if err := validator.validatePipelines(root.Content[index+1]); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+type stringFieldValidator struct {
+	visiting map[*yaml.Node]struct{}
+}
+
+func (validator *stringFieldValidator) enterMapping(node *yaml.Node) (*yaml.Node, error) {
+	node = dereferenceAlias(node)
+	if node.Kind != yaml.MappingNode {
+		return node, nil
+	}
+	if _, exists := validator.visiting[node]; exists {
+		return nil, fmt.Errorf("circular merge key reference at line %d", node.Line)
+	}
+	validator.visiting[node] = struct{}{}
+	return node, nil
+}
+
+func (validator *stringFieldValidator) leaveMapping(node *yaml.Node) {
+	if node.Kind == yaml.MappingNode {
+		delete(validator.visiting, node)
+	}
+}
+
+func (validator *stringFieldValidator) validatePipelines(node *yaml.Node) error {
+	node, err := validator.enterMapping(node)
+	if err != nil {
+		return err
+	}
+	if node.Kind != yaml.MappingNode {
+		return nil // The typed decoder reports container-shape errors.
+	}
+	defer validator.leaveMapping(node)
+
+	for index := 0; index+1 < len(node.Content); index += 2 {
+		if err := validateString(node.Content[index], "pipeline name"); err != nil {
+			return err
+		}
+		if err := validator.validatePipeline(node.Content[index+1]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (validator *stringFieldValidator) validatePipeline(node *yaml.Node) error {
+	node, err := validator.enterMapping(node)
+	if err != nil {
+		return err
+	}
+	if node.Kind != yaml.MappingNode {
+		return nil
+	}
+	defer validator.leaveMapping(node)
+
+	for index := 0; index+1 < len(node.Content); index += 2 {
+		key, value := node.Content[index], node.Content[index+1]
+		switch key.Value {
+		case "steps":
+			if err := validator.validateSteps(value); err != nil {
+				return err
+			}
+		case "<<":
+			if err := validator.validateMergedMappings(value, validator.validatePipeline); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (validator *stringFieldValidator) validateSteps(node *yaml.Node) error {
+	node = dereferenceAlias(node)
+	if node.Kind != yaml.SequenceNode {
+		return nil
+	}
+	for _, step := range node.Content {
+		if err := validator.validateStep(step); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (validator *stringFieldValidator) validateStep(node *yaml.Node) error {
+	node, err := validator.enterMapping(node)
+	if err != nil {
+		return err
+	}
+	if node.Kind != yaml.MappingNode {
+		return nil
+	}
+	defer validator.leaveMapping(node)
+
+	for index := 0; index+1 < len(node.Content); index += 2 {
+		key, value := node.Content[index], node.Content[index+1]
+		switch key.Value {
+		case "name", "exec", "run", "shell", "cwd":
+			if err := validateString(value, key.Value); err != nil {
+				return err
+			}
+		case "args":
+			if err := validator.validateStringSequence(value, "args"); err != nil {
+				return err
+			}
+		case "env":
+			if err := validator.validateStringMap(value, "env"); err != nil {
+				return err
+			}
+		case "<<":
+			if err := validator.validateMergedMappings(value, validator.validateStep); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (validator *stringFieldValidator) validateMergedMappings(node *yaml.Node, validate func(*yaml.Node) error) error {
+	node = dereferenceAlias(node)
+	if node.Kind == yaml.SequenceNode {
+		for _, item := range node.Content {
+			if err := validate(item); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return validate(node)
+}
+
+func (validator *stringFieldValidator) validateStringSequence(node *yaml.Node, field string) error {
+	node = dereferenceAlias(node)
+	if node.Kind != yaml.SequenceNode {
+		return nil
+	}
+	for _, item := range node.Content {
+		if err := validateString(item, field); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (validator *stringFieldValidator) validateStringMap(node *yaml.Node, field string) error {
+	node, err := validator.enterMapping(node)
+	if err != nil {
+		return err
+	}
+	if node.Kind != yaml.MappingNode {
+		return nil
+	}
+	defer validator.leaveMapping(node)
+
+	for index := 0; index+1 < len(node.Content); index += 2 {
+		key, value := node.Content[index], node.Content[index+1]
+		if key.Value == "<<" {
+			if err := validator.validateMergedMappings(value, func(merged *yaml.Node) error {
+				return validator.validateStringMap(merged, field)
+			}); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := validateString(key, field+" key"); err != nil {
+			return err
+		}
+		if err := validateString(value, field+" value"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateString(node *yaml.Node, field string) error {
+	node = dereferenceAlias(node)
+	if node.Kind != yaml.ScalarNode || node.Tag != "!!str" {
+		return fmt.Errorf("%s at line %d must be a string", field, node.Line)
+	}
+	return nil
+}
+
+func documentRoot(document *yaml.Node) *yaml.Node {
+	if document.Kind == yaml.DocumentNode && len(document.Content) > 0 {
+		return document.Content[0]
+	}
+	return document
+}
+
+func dereferenceAlias(node *yaml.Node) *yaml.Node {
+	for node.Kind == yaml.AliasNode && node.Alias != nil {
+		node = node.Alias
+	}
+	return node
 }
 
 // Validate checks the complete static pipeline contract.
