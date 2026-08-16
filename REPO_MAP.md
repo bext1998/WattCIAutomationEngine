@@ -2,7 +2,7 @@
 
 > 產出日期：2026-08-10
 > 工具：Codex（maze-repo-map）
-> 最後更新：2026-08-16（Issue #2～#9、#24 / PR #21～#23、#25～#28、#33～#34 合併後；Phase 1 Must Have 全數完成）
+> 最後更新：2026-08-16（Issue #2～#9、#24、#30 / PR #21～#23、#25～#28、#33～#35 合併後；Phase 1 Must Have 全數完成，對抗式審查回溯進行中）
 
 ---
 
@@ -106,8 +106,8 @@ internal/proc/           — Windows Job Object 綁定、process tree 管理與 
 
 ## 測試
 
-- **測試檔案**：`cmd/watt/root_test.go`（CLI、`run`／`check`／`check --env` 端到端、無副作用／失敗路徑、usage error、help 與 `exitError`）；`internal/pipeline/pipeline_test.go`（載入與靜態驗證）；`internal/env/*_test.go`（env 合併、cwd 解析、`ResolveExecutable` PATH 探測、`diagnostics_test.go` 涵蓋 `ProbeDiagnostics` 安全性、pwsh timeout 與 grandchild pipe-handle 情境、`RedactKnownValues` 一般與重疊值案例）；`internal/runner/runner_test.go`（exec／shell 啟動、output_tail、cwd／command 失敗、`TestResult_OutputTail_RedactsKnownEnvValues`）；`internal/result/result_test.go`（Result schema 序列化）；`internal/proc/proc_test.go`（Job Object 綁定、`TestCancel_KillsDescendantProcesses`、`TestProc_NoOrphansOnNormalCompletion`、`TestExitCode_InternalErrorOnUnconfirmedCancellation`）；`internal/orchestrator/orchestrator_test.go`（含 `TestRunCancellationReturnsCancelled`、`TestEnvDiagnostics_NoValuesLeaked` 端到端）。
-- **執行測試**：`go test ./...`；repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），已在 PR #25～#28、#33、#34 與 main push 各成功執行一次，但仍沒有獨立 QA 報告；取消相關時序敏感測試另跑過 `-count=3` 確認穩定（本機驗證，未進 CI）；PR #34 的 pwsh timeout 修正另外做過反向驗證（本機暫時移除修正重跑測試，確認會如預期失敗，證明測試非假綠燈）。
+- **測試檔案**：`cmd/watt/root_test.go`（CLI、`run`／`check`／`check --env` 端到端、無副作用／失敗路徑、usage error、help 與 `exitError`；`TestExecStep_NoShellIndirection` 已改用即時編譯的 argv helper 真正驗證 P-4；`TestRun_FailFastStopsAfterCwdFailure`、`TestRun_ResultWriteFailureReturnsInternalError` 驗證 exit code 邊界）；`internal/pipeline/pipeline_test.go`（載入與靜態驗證）；`internal/env/*_test.go`（env 合併、cwd 解析、`ResolveExecutable` PATH 探測、`diagnostics_test.go` 涵蓋 `ProbeDiagnostics` 安全性、pwsh timeout 與 grandchild pipe-handle 情境、`RedactKnownValues` 一般與重疊值案例）；`internal/runner/runner_test.go`（exec／shell 啟動、output_tail、cwd／command 失敗、`TestResult_OutputTail_RedactsKnownEnvValues`、`TestRunKeepsOutputTailValidAtMultibyteBoundary` 驗證 R-9 多位元組截斷邊界不再無限迴圈）；`internal/result/result_test.go`（Result schema 序列化）；`internal/proc/proc_test.go`（Job Object 綁定、`TestCancel_KillsDescendantProcesses`、`TestProc_NoOrphansOnNormalCompletion`、`TestExitCode_InternalErrorOnUnconfirmedCancellation`）；`internal/orchestrator/orchestrator_test.go`（含 `TestRunCancellationReturnsCancelled`、`TestEnvDiagnostics_NoValuesLeaked` 端到端）。
+- **執行測試**：`go test ./...`；repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），已在 PR #25～#28、#33～#35 與 main push 各成功執行一次，但仍沒有獨立 QA 報告；取消相關時序敏感測試另跑過 `-count=3` 確認穩定（本機驗證，未進 CI）；PR #34 的 pwsh timeout 修正、PR #35 的 R-9 無限迴圈修正皆另外做過反向驗證（本機暫時還原修正前邏輯重跑測試，確認會如預期卡死／失敗，證明測試非假綠燈；均已還原）。
 
 ---
 
@@ -121,10 +121,12 @@ internal/proc/           — Windows Job Object 綁定、process tree 管理與 
 
 ## 目前未知項目
 
-- Issue #2～#9、#24（Phase 1 Must Have 全數 Sub-issue）皆已完成並關閉；**目前沒有已解除阻塞的 P0，也沒有既定下一前線**，下一步待使用者確認方向（詳見 `NEXT_ACTION.md`）。GitHub repo 現已建立 P0～P4 優先級標籤（`MAZE_PROJECT.md` 先前記錄的「無標籤」已過期）。
+- Issue #2～#9、#24（Phase 1 Must Have）與 #30（Exec Step 對抗式審查）皆已完成並關閉；[Issue #29](https://github.com/bext1998/WattCIAutomationEngine/issues/29)（對抗式審查回溯總覽）**尚未關閉**，[#31](https://github.com/bext1998/WattCIAutomationEngine/issues/31)（Env 三層合併／cwd 解析，P1，security）是目前工作前線，其後接 [#32](https://github.com/bext1998/WattCIAutomationEngine/issues/32)（Pipeline 資料模型，P2）。GitHub repo 現已建立 P0～P4 優先級標籤（`MAZE_PROJECT.md` 先前記錄的「無標籤」已過期）。
+- **PR #35（Issue #30）修正了一個真實的嚴重 bug**：`internal/runner` 的 `tailBuffer.String()`（R-9 output_tail 截斷）在截斷點恰好落在多位元組 UTF-8 字元中間時會無限迴圈，卡死 `watt run`；已修正並經獨立 subagent 複審（含數學推導與實際複現），結論 go。
 - `watt.yaml` 尚未納入 repository；目前只能透過測試或外部工作目錄提供 pipeline 定義驗證 `watt check`／`watt run`。
-- repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），已在 PR #25～#28、#33、#34 與 main push 各成功執行一次；仍沒有獨立 QA 報告。
+- repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），已在 PR #25～#28、#33～#35 與 main push 各成功執行一次；仍沒有獨立 QA 報告。
 - Issue #9／PR #34 已知殘餘風險：pwsh 版本探測的 `WaitDelay` 修正保證探測呼叫本身會逾時返回，但不會終止造成卡住的 wrapper 之 grandchild 行程本身（該情境下 grandchild 可能短暫繼續在背景執行）；不屬於 spec §7.4 Job Object 契約範圍。
 - Issue #8／PR #33 已知驗證缺口：AC-6 checkbox 關閉當下未勾選——取消流程以 `context` cancellation 模擬 Ctrl+C（語意等價），未實際發送 OS 層級 Ctrl+C 訊號端到端驗證，CI 也未針對取消情境跑專門驗證（僅本機 Windows 手動測過）；詳見 `NEXT_ACTION.md`。
-- PR #27（Issue #6）審查留下的非阻擋技術債（詳見 [PR #27 留言](https://github.com/bext1998/WattCIAutomationEngine/pull/27#issuecomment-5285418121) 與 `NEXT_ACTION.md`）：`orchestrator.WattVersion` 寫死 `"dev"`、`resolved_command` 空白 join 對含空白參數失真、Run-mode 失敗訊息未帶 step 名稱、`result.Write` 失敗時吞掉原始 step 錯誤，以及三項測試缺口；PR #28（Issue #7）留下的非阻擋觀察（`TestMissingPwsh_NoFallbackTo51` 覆蓋不足、`runner.shellArgs()` 防禦深度缺口）同樣尚未處理。
-- 對抗式審查回溯已建立追蹤（[Issue #29](https://github.com/bext1998/WattCIAutomationEngine/issues/29) 總覽，P1 ＋ Sub-issue #30／#31，P1、#32，P2），範圍已定案，是目前優先級最高的候選下一前線，但尚未開始執行。
+- PR #27（Issue #6）技術債（詳見 [PR #27 留言](https://github.com/bext1998/WattCIAutomationEngine/pull/27#issuecomment-5285418121)）三項測試缺口已由 PR #35 補齊兩項（`result.Write` 失敗路徑、多位元組 UTF-8 截斷邊界）；剩餘 `orchestrator.WattVersion` 寫死 `"dev"`、`resolved_command` 空白 join 對含空白參數失真兩項，經 PR #35 審查確認純屬 diagnostic 顯示問題、不影響實際 argv 或語意判定，維持低優先級；PR #28（Issue #7）留下的非阻擋觀察（`TestMissingPwsh_NoFallbackTo51` 覆蓋不足、`runner.shellArgs()` 防禦深度缺口）尚未處理。
+- 對抗式審查回溯進度：[Issue #29](https://github.com/bext1998/WattCIAutomationEngine/issues/29) 總覽尚未關閉，#30 已完成，#31（P1）為下一前線，#32（P2）待其後。
+- PR #35 審查過程中額外發現：`docs/spec.md` §4.2 提到的 `--output json` 行為目前 repo 尚未實作，對應既有 [Issue #10](https://github.com/bext1998/WattCIAutomationEngine/issues/10)（P3，非阻塞，純記錄）。

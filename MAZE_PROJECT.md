@@ -8,7 +8,7 @@
 - 專案名稱：Watt
 - 目標工具：Claude Code；Codex 可參與規格審查、實作與 closeout 文件同步
 - 建立日期：2026-08-08
-- 目前狀態：`in-progress`；Issue #2、#3、#4、#5、#6、#7、#8、#9、#24（Phase 1 Must Have）已完成；目前沒有已解除阻塞的 P0，下一步方向待使用者確認（見 NEXT_ACTION.md）
+- 目前狀態：`in-progress`；Issue #2、#3、#4、#5、#6、#7、#8、#9、#24（Phase 1 Must Have）與 #30 已完成；Issue #29（對抗式審查回溯總覽）尚未關閉，下一前線為 #31（P1，security）
 - 最後同步：2026-08-16
 
 ## 文件
@@ -34,8 +34,8 @@
 - Category label convention：repo 現有 bug／documentation／enhancement／duplicate／good first issue／help wanted／invalid／question／wontfix；優先比對既有標籤
 - Default assignee policy：每次執行 spec-to-issues 時詢問（本人／不指派／逐項／指定帳號）
 - Allow label creation：待各次執行時於 Dry Run 取得確認
-- Current delivery：Issue #2、#3、#4、#5、#6、#7、#8、#9、#24（Phase 1 Must Have 全數）已關閉；PR #21、#22、#23、#25、#26、#27、#28、#33、#34 已合併；Parent Issue #1 仍開啟，目前沒有已解除阻塞的 P0；P1 候選前線為 Issue #29～#31（對抗式審查回溯）
-- CI／QA evidence：repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），已在 PR #25～#28、#33、#34 與 main push 各成功執行一次；仍沒有獨立 QA 報告
+- Current delivery：Issue #2、#3、#4、#5、#6、#7、#8、#9、#24（Phase 1 Must Have 全數）、#30 已關閉；PR #21、#22、#23、#25、#26、#27、#28、#33、#34、#35 已合併；Parent Issue #1、Issue #29（對抗式審查回溯總覽）仍開啟；P1 前線為 Issue #31（Env 三層合併／cwd 解析對抗式審查，security）
+- CI／QA evidence：repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），已在 PR #25～#28、#33～#35 與 main push 各成功執行一次；仍沒有獨立 QA 報告
 
 ## 備注
 
