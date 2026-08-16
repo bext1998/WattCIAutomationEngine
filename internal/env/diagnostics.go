@@ -50,7 +50,11 @@ func ProbeDiagnostics(osName, arch string, tools []string) Diagnostics {
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), pwshVersionProbeTimeout)
-		version, err := exec.CommandContext(ctx, path, "-NoLogo", "-NoProfile", "-Command", "$PSVersionTable.PSVersion.ToString()").Output()
+		command := exec.CommandContext(ctx, path, "-NoLogo", "-NoProfile", "-Command", "$PSVersionTable.PSVersion.ToString()")
+		// A wrapper may leave a descendant holding the stdout pipe after the
+		// context kills the wrapper. WaitDelay bounds Output's wait for that EOF.
+		command.WaitDelay = pwshVersionProbeTimeout
+		version, err := command.Output()
 		cancel()
 		if err != nil || strings.TrimSpace(string(version)) == "" {
 			diagnostics.ShellAvailable[shell] = true
@@ -95,13 +99,32 @@ func RedactKnownValues(text string, environment map[string]string) string {
 		seen[value] = struct{}{}
 		values = append(values, value)
 	}
-	sort.Slice(values, func(i, j int) bool {
-		return len(values[i]) > len(values[j])
-	})
-	for _, value := range values {
-		text = strings.ReplaceAll(text, value, redactedValue)
+	covered := make([]bool, len(text))
+	for index := 0; index < len(text); index++ {
+		for _, value := range values {
+			if !strings.HasPrefix(text[index:], value) {
+				continue
+			}
+			for valueIndex := 0; valueIndex < len(value); valueIndex++ {
+				covered[index+valueIndex] = true
+			}
+		}
 	}
-	return text
+
+	var redacted strings.Builder
+	redacted.Grow(len(text))
+	for index := 0; index < len(text); {
+		if !covered[index] {
+			redacted.WriteByte(text[index])
+			index++
+			continue
+		}
+		redacted.WriteString(redactedValue)
+		for index < len(text) && covered[index] {
+			index++
+		}
+	}
+	return redacted.String()
 }
 
 func environmentVariableNames() []string {

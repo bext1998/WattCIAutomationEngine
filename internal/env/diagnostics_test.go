@@ -65,6 +65,39 @@ func TestProbeDiagnostics_PwshVersionTimeoutFallsBack(t *testing.T) {
 	}
 }
 
+func TestProbeDiagnostics_PwshVersionTimeoutWithGrandchildFallsBack(t *testing.T) {
+	binDir := t.TempDir()
+	marker := filepath.Join(t.TempDir(), "grandchild-started")
+	fakePwsh := filepath.Join(binDir, "pwsh.cmd")
+	contents := "@echo off\r\nstart \"\" /b cmd /c \"ping -n 4 127.0.0.1 > nul\"\r\necho started > \"%WATT_PWSH_GRANDCHILD_MARKER%\"\r\n:loop\r\ngoto loop\r\n"
+	if err := os.WriteFile(fakePwsh, []byte(contents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	systemRoot := os.Getenv("SystemRoot")
+	if systemRoot == "" {
+		t.Fatal("SystemRoot is empty")
+	}
+	t.Setenv("PATH", binDir+";"+filepath.Join(systemRoot, "System32"))
+	t.Setenv("PATHEXT", ".COM;.EXE;.BAT;.CMD")
+	t.Setenv("WATT_PWSH_GRANDCHILD_MARKER", marker)
+
+	previousTimeout := pwshVersionProbeTimeout
+	pwshVersionProbeTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { pwshVersionProbeTimeout = previousTimeout })
+
+	started := time.Now()
+	diagnostics := ProbeDiagnostics("windows", "amd64", nil)
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("ProbeDiagnostics() took %s, want timeout despite a grandchild holding stdout", elapsed)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("grandchild marker %q was not written: %v", marker, err)
+	}
+	if available := diagnostics.ShellAvailable["pwsh"]; available != true {
+		t.Errorf("shell_available[pwsh] = %#v, want true fallback after timeout", available)
+	}
+}
+
 func TestRedactKnownValues(t *testing.T) {
 	got := RedactKnownValues("long-secret-value short 1234567", map[string]string{
 		"LONG":  "long-secret-value",
@@ -72,6 +105,20 @@ func TestRedactKnownValues(t *testing.T) {
 	})
 	if got != "[REDACTED] short 1234567" {
 		t.Errorf("RedactKnownValues() = %q", got)
+	}
+}
+
+func TestRedactKnownValues_RedactsOverlappingValues(t *testing.T) {
+	const (
+		first  = "abcdefghXY"
+		second = "XYijklmnop"
+	)
+	got := RedactKnownValues(first+"ijklmnop", map[string]string{
+		"TOKEN_A": first,
+		"TOKEN_B": second,
+	})
+	if got != redactedValue {
+		t.Errorf("RedactKnownValues() = %q, want a single redacted span", got)
 	}
 }
 
