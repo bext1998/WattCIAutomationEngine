@@ -1,7 +1,7 @@
 # Watt — 專案說明
 
 > 建立日期：2026-08-08
-> 最後更新：2026-08-16（Issue #9 完成，Phase 1 Must Have 全數落地）
+> 最後更新：2026-08-17（Issue #13／#41 完成，spec.md 升至 v1.4）
 
 ---
 
@@ -65,3 +65,8 @@ Watt 解決兩個相鄰但不同的問題：
 - Issue #7 已完成：`watt run` 的 Shell Step 執行（`pwsh`／`cmd`）；PR #28 已合併（經對抗式審查修正一輪後才合併）。
 - Issue #8 已完成：Windows Job Object 綁定、Ctrl+C 安全終止整棵 process tree、cleanup 確認與 `EXIT_CANCELLED`／`EXIT_INTERNAL_ERROR` 判定；PR #33 已合併。
 - Issue #9 已完成：`result.json` 的 `environment` 診斷區塊（os/arch/shell_available/resolved_tools/env_var_names，僅名稱不含值）與 `resolved_command`／`output_tail` 已知環境值遮罩；PR #34 已合併（先跑過一輪對抗式審查抓到 pwsh timeout 與遮罩重疊值兩個真問題，修正後才合併）。至此 Phase 1 Must Have（§5.1）全數完成。
+- Issue #32 已完成：Pipeline 資料模型與靜態驗證對抗式審查，拒絕 YAML scalar coercion 與循環 merge；PR #38 已合併。
+- Issue #10 已完成：`watt run` 新增 `--output json` 旗標，啟用時 step 即時輸出改導向 stderr、執行結束後把最終 result JSON 寫到 stdout；`orchestrator.Outcome` 新增 `Assembled` 欄位，`internal/result` 抽出共用 `Marshal()`；PR #39 已合併。
+- Issue #13 已完成：Dogfooding，repo root 新增 `watt.yaml` 的 `package` pipeline（Test → Build → Package），讓 Watt 對自己 dogfooding；PR #40 已合併。離線驗證改用 `GOPROXY=off` 代理查核而非真正斷網，已與使用者確認接受此驗證強度。
+- Issue #41 已完成：spec.md v1.3 → v1.4，§13 AC-1 驗收標準文字由具體檔名「skills.zip」改為中性措辭「pipeline 定義中指定的 artifact」，避免與 §4.1／§10.1 示範情境的產物命名耦合；PR #42 已合併。§1.2／NG-8「消費者無認知」邊界經查證未受影響，純文件措辭修訂。
+- PR #40 合併時機早於「`dist/skills.zip` → `dist/watt.zip`」改名 commit 推送完成，導致該修正未進入 main；已透過 PR #43 補上（cherry-pick 原 commit，重新驗證後推送）。
