@@ -1,0 +1,24 @@
+version: 1
+
+env:
+  CGO_ENABLED: "0"
+
+pipelines:
+  package:
+    steps:
+      - name: Test
+        exec: go
+        args: ["test", "./..."]
+
+      - name: Build
+        exec: go
+        args: ["build", "-trimpath", "-o", "dist/watt.exe", "./cmd/watt"]
+
+      # 檔名 skills.zip 對齊 spec §13 AC-1 的字面產出檔名要求；本專案目前沒有 skills/
+      # 目錄，實際打包內容是建置出來的 dist/watt.exe，不是 spec §10.1 範例語境下的
+      # Skill 套件內容。
+      - name: Package
+        shell: pwsh
+        run: |
+          Remove-Item ./dist/skills.zip -Force -ErrorAction SilentlyContinue
+          Compress-Archive ./dist/watt.exe ./dist/skills.zip -Force

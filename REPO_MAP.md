@@ -113,7 +113,7 @@ internal/proc/           — Windows Job Object 綁定、process tree 管理與 
 
 ## 設定
 
-- **環境設定**：`go.mod`／`go.sum` 已建立；尚無 `.env` 或 `watt.yaml`。
+- **環境設定**：`go.mod`／`go.sum` 已建立；repo root 已有 `watt.yaml`（Issue #13 dogfooding，`package` pipeline：`go test` → `go build` → pwsh 壓縮為 `dist/skills.zip`），尚無 `.env`。
 - **關鍵設定項**：規格定義 pipeline 預設檔案為 repo root 的 `watt.yaml`，結果預設寫入 `.watt/result.json`；pipeline 載入／驗證、exec／shell step 執行、result 寫入與 `environment` 診斷／redaction（Issue #6、#7、#8、#9）皆已完成——Phase 1 Must Have（§5.1）全數落地。
 - **新增依賴**：`golang.org/x/sys/windows`（Issue #8 引入；標準庫不提供 Job Object API，`os.Process` 也不對外公開子行程原生 handle，無法在不繞過 `exec.Cmd` 的情況下滿足 P-1 時序要求）。
 
@@ -124,7 +124,7 @@ internal/proc/           — Windows Job Object 綁定、process tree 管理與 
 - Issue #2～#9、#24（Phase 1 Must Have）與 #30、#31（對抗式審查回溯）皆已完成並關閉；[Issue #29](https://github.com/bext1998/WattCIAutomationEngine/issues/29)（對抗式審查回溯總覽）**尚未關閉**，[#32](https://github.com/bext1998/WattCIAutomationEngine/issues/32)（Pipeline 資料模型，P2）是最後一個 Sub-issue、目前工作前線。GitHub repo 現已建立 P0～P4 優先級標籤（`MAZE_PROJECT.md` 先前記錄的「無標籤」已過期）。
 - **PR #35（Issue #30）修正了一個真實的嚴重 bug**：`internal/runner` 的 `tailBuffer.String()`（R-9 output_tail 截斷）在截斷點恰好落在多位元組 UTF-8 字元中間時會無限迴圈，卡死 `watt run`；已修正並經獨立 subagent 複審（含數學推導與實際複現），結論 go。
 - **PR #36（Issue #31）修正了一個違反確定性核心承諾的真實 bug**：`internal/env` 的 `Merge()` 若同一層 env 定義有大小寫不同但視為同一 key 的重複寫法（例如同時寫 `PATH:`／`Path:`），因 Go map 走訪順序隨機化，合併結果在不同次執行間不確定；已修正為合併前先對同層原始 key 做 lexical sort。獨立 subagent 複審確認核心 bug（實測每次執行 10 次迭代內必定命中不一致），結論 go，附帶要求追蹤：已建立 [Issue #37](https://github.com/bext1998/WattCIAutomationEngine/issues/37)（`pipeline.Validate()` 應比照 duplicate step name 慣例擋下同層 case-variant env key，P2，security，未阻塞 #31 關閉）。cwd 路徑穿越／跨磁碟機、`ResolveExecutable` 的 PATHEXT 委派標準庫，兩者皆判定符合 `PROJECT_BRIEF.md` NG-4（不提供 sandbox）既有 non-goal，不修，僅新增測試存證行為。
-- `watt.yaml` 尚未納入 repository；目前只能透過測試或外部工作目錄提供 pipeline 定義驗證 `watt check`／`watt run`。
+- `watt.yaml`（Issue #13）已納入 repository，`watt run package` 於本機離線環境未斷網驗證通過（exit code 0、`result.status` 為 `success`、`dist/skills.zip` 已產生）；尚未在實際斷網環境重跑，AC-1 的「離線」字面要求尚未完全確認。
 - repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），已在 PR #25～#28、#33～#36 與 main push 各成功執行一次；仍沒有獨立 QA 報告。
 - Issue #9／PR #34 已知殘餘風險：pwsh 版本探測的 `WaitDelay` 修正保證探測呼叫本身會逾時返回，但不會終止造成卡住的 wrapper 之 grandchild 行程本身（該情境下 grandchild 可能短暫繼續在背景執行）；不屬於 spec §7.4 Job Object 契約範圍。
 - Issue #8／PR #33 已知驗證缺口：AC-6 checkbox 關閉當下未勾選——取消流程以 `context` cancellation 模擬 Ctrl+C（語意等價），未實際發送 OS 層級 Ctrl+C 訊號端到端驗證，CI 也未針對取消情境跑專門驗證（僅本機 Windows 手動測過）；詳見 `NEXT_ACTION.md`。
