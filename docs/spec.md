@@ -1,8 +1,8 @@
 # Watt Specification — Phase 1 (MVP)
 
-**版本**：v1.3
-**狀態**：Review（Maze 已於 2026-08-08 確認 v1.3 內容）
-**日期**：2026-08-08
+**版本**：v1.4
+**狀態**：Review（Maze 已於 2026-08-08 確認 v1.3 內容；使用者已於 2026-08-17 確認 v1.4 修訂）
+**日期**：2026-08-17
 **適用對象**：實作 AI 代理（Codex / Claude Code / opencode / Cursor）、規格審查者
 **技術環境**：Go 1.24.x、static build、zero CGO、Windows-first（amd64）
 **前置文件**：[未提供] — Taylor spec 中的 gate 整合章節尚未撰寫，本文件不得反向依賴之
@@ -106,6 +106,8 @@ Taylor（未來）──────┘
 預期結果：依序執行 Test → Build → Package，成功產出 skills.zip，
           exit code 0，並寫出 .watt/result.json（status: success）
 ```
+
+> `skills.zip` 為本情境自行選擇的示範產物命名（假設此專案本身即為 Skill 授權專案），非 Watt 的通用契約要求；Watt 對 pipeline 產出的檔名、內容或語意無任何認知。
 
 **情境 2：Coding Agent 自行驗證（execution 權限）**
 
@@ -515,6 +517,8 @@ pipelines:
           Compress-Archive ./skills/* ./dist/skills.zip -Force
 ```
 
+> 上例的 `skills.zip`／`./skills/*` 為範例情境自行選擇的路徑與檔名，非 Watt 規定的固定值；Watt 對 pipeline 內容無任何認知，任何路徑、檔名皆由 pipeline 撰寫者自行決定。
+
 ### 10.2 消費者正確用法 vs 常見錯誤
 
 ```go
@@ -608,7 +612,7 @@ if strings.Contains(stdout, "FAIL") { ... }
 
 | # | 驗收項目 | 測量方式 | 通過標準 |
 |---|---|---|---|
-| AC-1 | 備援 CI 核心情境 | 於離線環境執行 `watt run package` | 產出 skills.zip，exit code 0，result.status 為 success |
+| AC-1 | 備援 CI 核心情境 | 於離線環境執行 `watt run package` | 產出 pipeline 定義中指定的 artifact，exit code 0，result.status 為 success |
 | AC-2 | Fail-fast | 令第二個 step 回非零 | exit code 1；result.steps 長度為 2；第三個 step 不出現在 result |
 | AC-3 | Command not found | `exec` 指向不存在之執行檔 | exit code 3；錯誤訊息含缺少的 command 名稱；無 panic |
 | AC-4 | Invalid pipeline | 提供語法錯誤之 YAML | exit code 2；訊息含行號；未寫出 result.json；既有 result.json 不被覆寫或刪除 |
@@ -652,3 +656,4 @@ if strings.Contains(stdout, "FAIL") { ... }
 | v1.1 | 2026-08-08 | 依 Codex 唯讀規格審查（SR-001～SR-012）修訂：新增 §1.3 名詞定義；修正 G-1／G-2 與 result.json 產出範圍矛盾；補齊 §0 假設影響範圍並新增 A-7～A-9；§4.2 拆分 Ctrl+C 情境、新增 `check --env` 與 result 寫入失敗之對應處理；F-14 補上與 F-13 stdout 衝突之解法；§7.1 補齊靜態驗證規則彙整並修正 Shell 欄位註解；§7.2 新增 R-7／R-8 與 partial result 欄位規則，修正 `exit_code` 可為 null；§7.3 補齊 `EXIT_INTERNAL_ERROR`／`EXIT_ENVIRONMENT_UNAVAILABLE` 觸發條件；§7.4 補齊 Job Object 綁定時序與關閉前確認；修正 §11.1 章節引用錯誤並新增 11 項測試案例；統一 `environment_unavailable` 用詞 | Claude Code（依 Codex 審查結果） |
 | v1.2 | 2026-08-08 | 依 v1.1 複審修訂：統一 partial result 的 step 嘗試語意與 `internal_error` 狀態；補齊 R-4／R-8 對 `output_tail`、`resolved_command` 的已知環境值遮罩規則，並同步修正 AC-7 與測試案例；補齊 R-6 semantic 欄位版本規則、R-9 output tail 大小與 UTF-8 邊界；統一無 active step 時的 cancellation 與 `EXIT_CANCELLED`／`EXIT_INTERNAL_ERROR` 對應，明確化 5 秒清理期限與 Job Object close-on-kill 安全清理；強化 P-2／P-3 的 process tree 清理契約；補齊 `watt check` exit code 語意、`EXIT_STEP_FAILED` 的 cwd 啟動錯誤、default pipeline 缺失與空白欄位驗證；修正 §8 流程與 partial result 限定、F-14 invalid pipeline 的 stdout 行為及 §10.2 遺漏 `EXIT_INVALID_PIPELINE` 的範例分支；新增 internal error 測試與 AC-12，更新架構中的 redaction 職責，並修正 §12 的章節引用 | Codex |
 | v1.3 | 2026-08-08 | 依 v1.2 複審修訂：R-7 補齊 `cwd` 等 process 從未啟動之 `failed` step 的 `exit_code` 為 `null`，並明訂該情況不保證與 `failed` 狀態同時具備整數 exit code；Partial Result 欄位規則新增對應條目，並明訂 cancellation 確認失敗時該 step 本身仍標記 `cancelled`；A-7 由「待確認」改為「已確認」以消除與 R-9 FROZEN 數值的矛盾；新增 A-10 明確定義 cancellation 確認期限（5 秒），§7.3 不變式與 §4.2／AC-6 統一引用同一定義來源；R-8 補上遮罩最小長度門檻（8 字元）與短值誤傷風險之免責聲明；P-1 補齊 Job Object 建立時須設定 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`，使 P-3 的 close-on-kill 後備手段實際可用；R-6 補充說明本次草稿修訂不觸發 `schema_version` 遞增之理由 | Claude Code（依複審結果） |
+| v1.4 | 2026-08-17 | 依 Issue #13／PR #40 dogfooding 實作經驗與 Issue #41 規格審查（SR-001 Major、SR-002 Suggestion）修訂：§13 AC-1 驗收標準文字由具體檔名「skills.zip」改為中性措辭「pipeline 定義中指定的 artifact」，避免與示範情境的產物命名耦合；§4.1 情境1、§10.1 範例旁新增澄清敘述，明確 skills.zip／skills 相關命名僅為範例情境自選命名，非 Watt 對 Skill 概念的認知或依賴（§1.2／NG-8 邊界未受影響，僅文件措辭修訂，不影響 §7 FROZEN 契約） | Claude Code（依 Issue #41 規格審查結果，經使用者確認） |
