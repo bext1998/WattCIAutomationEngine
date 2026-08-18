@@ -41,7 +41,7 @@ jobs:
       contents: write
     steps:
       - name: Download watt.exe
-        uses: actions/download-artifact@v7.0.1
+        uses: actions/download-artifact@v8.0.1
         with:
           name: watt-exe
           path: dist
