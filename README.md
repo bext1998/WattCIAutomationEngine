@@ -25,7 +25,25 @@ Watt 不提供 sandbox、filesystem isolation、secret store、remote runner 或
 
 ### 安裝
 
-主要方式是到 [GitHub Releases](https://github.com/bext1998/WattCIAutomationEngine/releases) 下載對應版本的 `watt.exe`，並將它放到 PATH 中。
+主要方式是到 [GitHub Releases](https://github.com/bext1998/WattCIAutomationEngine/releases) 下載對應版本的 `watt.exe`，然後把它加進 PATH，之後才能在任何資料夾直接打 `watt` 使用。
+
+**PATH 是什麼？** 在 PowerShell 或命令提示字元打指令時，Windows 只會去幾個固定的資料夾裡找對應的程式，這份「固定資料夾清單」就叫 PATH。剛下載的 `watt.exe` 不在這份清單裡的任何一個資料夾，所以直接打 `watt` 會出現「`watt` 不是內部或外部命令」這種錯誤。只要把 `watt.exe` 所在的資料夾加進這份清單，以後在任何地方打 `watt` 就能直接執行，不用每次都打完整路徑。
+
+**怎麼把資料夾加進 PATH（Windows 圖形介面，最簡單）：**
+
+1. 找個固定的地方放 `watt.exe`，例如新建一個 `C:\Tools\watt\` 資料夾，把下載好的 `watt.exe` 放進去（資料夾名稱、位置你自己決定，記住這個路徑就好）
+2. 按 Windows 鍵，搜尋「編輯系統環境變數」並打開
+3. 點「環境變數(N)...」
+4. 在「使用者變數」區塊找到 `Path` 這一列，選起來後點「編輯」
+5. 點「新增」，貼上剛才那個資料夾的完整路徑（例如 `C:\Tools\watt`），按確定，然後把剛才開的視窗都按確定關掉
+6. **重新開一個新的 PowerShell 視窗**（正在開著的舊視窗不會生效，一定要開新的才讀得到剛才的設定）
+7. 打 `watt --version`，能看到版本號就代表裝好了
+
+進階使用者也可以用一行 PowerShell 指令完成同樣的事（一樣要開新視窗才生效）：
+
+```powershell
+[Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\Tools\watt", "User")
+```
 
 若想執行開發版，可改用 `go install`，但這個方式**需要先自行安裝 Go 1.24 以上版本的工具鏈**（見 [go.dev/dl](https://go.dev/dl/)）——這是 Watt 本身建置階段的依賴，跟建好之後 `watt.exe` 執行時零依賴（不需要 Node.js、Python 或其他 runtime）是兩回事：
 
