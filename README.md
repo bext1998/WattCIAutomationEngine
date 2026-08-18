@@ -37,26 +37,14 @@ go install github.com/bext1998/WattCIAutomationEngine/cmd/watt@latest
 
 ### 查看版本與說明
 
-```powershell
-go run ./cmd/watt --version
-go run ./cmd/watt --help
-```
-
-### 執行測試與靜態檢查
+安裝完成、`watt` 已在 PATH 上之後，直接執行：
 
 ```powershell
-go test ./...
-go vet ./...
+watt --version
+watt --help
 ```
 
-### 建立 Windows 執行檔
-
-```powershell
-.\scripts\build.ps1
-.\dist\watt.exe --version
-```
-
-Build script 會固定使用 `GOOS=windows`、`GOARCH=amd64` 與 `CGO_ENABLED=0`，產出單一 `dist/watt.exe`。這裡的 `.\dist\watt.exe` 是 repository 內建置產物的相對路徑；使用 Releases 安裝後可直接呼叫 `watt`。
+不需要 Go 工具鏈，也不需要在 Watt 原始碼目錄下——這就是裝好之後的日常用法。若你是在 Watt 原始碼目錄下開發、尚未安裝，見下方「開發 Watt 本身」改用 `go run`。
 
 ## CLI
 
@@ -124,6 +112,33 @@ cmd/watt → internal/orchestrator → internal/pipeline
 - `internal/result`：Result 組裝、序列化與寫入（已實作）
 
 模組依賴只能由上而下，Watt 不得反向依賴 Taylor 或其他上層消費者。
+
+## 開發 Watt 本身
+
+以下指令只給要修改 Watt 原始碼、或想在原始碼目錄下跑開發版的人用；一般使用者裝好 `watt.exe` 之後用不到這些，直接看上面「快速開始」與「CLI」就夠了。
+
+### 查看版本與說明（開發版）
+
+```powershell
+go run ./cmd/watt --version
+go run ./cmd/watt --help
+```
+
+### 執行測試與靜態檢查
+
+```powershell
+go test ./...
+go vet ./...
+```
+
+### 建立 Windows 執行檔
+
+```powershell
+.\scripts\build.ps1
+.\dist\watt.exe --version
+```
+
+Build script 會固定使用 `GOOS=windows`、`GOARCH=amd64` 與 `CGO_ENABLED=0`，產出單一 `dist/watt.exe`。這裡的 `.\dist\watt.exe` 是 repository 內建置產物的相對路徑；使用 Releases 安裝後可直接呼叫 `watt`。
 
 ## 開發規範
 
