@@ -157,6 +157,7 @@ func newRootCommand() *cobra.Command {
 			outcome, err := orchestrator.Run(orchestrator.Options{
 				RepoRoot:     repoRoot,
 				PipelineName: pipelineName,
+				Version:      version,
 				Stdout:       stepStdout,
 				Stderr:       stderr,
 				Context:      ctx,

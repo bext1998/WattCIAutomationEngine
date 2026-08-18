@@ -23,6 +23,18 @@ Watt 不提供 sandbox、filesystem isolation、secret store、remote runner 或
 
 ## 快速開始
 
+### 安裝
+
+主要方式是到 [GitHub Releases](https://github.com/bext1998/WattCIAutomationEngine/releases) 下載對應版本的 `watt.exe`，並將它放到 PATH 中。
+
+若想執行開發版，可改用 `go install`，但這個方式**需要先自行安裝 Go 1.24 以上版本的工具鏈**（見 [go.dev/dl](https://go.dev/dl/)）——這是 Watt 本身建置階段的依賴，跟建好之後 `watt.exe` 執行時零依賴（不需要 Node.js、Python 或其他 runtime）是兩回事：
+
+```powershell
+go install github.com/bext1998/WattCIAutomationEngine/cmd/watt@latest
+```
+
+這是輔助安裝方式，不是主要安裝管道；一般使用者請優先用上面的 GitHub Releases 下載，不需要安裝任何額外工具鏈。
+
 ### 查看版本與說明
 
 ```powershell
@@ -44,7 +56,7 @@ go vet ./...
 .\dist\watt.exe --version
 ```
 
-Build script 會固定使用 `GOOS=windows`、`GOARCH=amd64` 與 `CGO_ENABLED=0`，產出單一 `dist/watt.exe`。
+Build script 會固定使用 `GOOS=windows`、`GOARCH=amd64` 與 `CGO_ENABLED=0`，產出單一 `dist/watt.exe`。這裡的 `.\dist\watt.exe` 是 repository 內建置產物的相對路徑；使用 Releases 安裝後可直接呼叫 `watt`。
 
 ## CLI
 

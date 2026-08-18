@@ -32,6 +32,7 @@ type Options struct {
 	RepoRoot     string
 	PipelinePath string
 	PipelineName string
+	Version      string
 	Stdout       io.Writer
 	Stderr       io.Writer
 	Context      context.Context
@@ -101,13 +102,17 @@ func Run(options Options) (Outcome, error) {
 	diagnostics := env.ProbeDiagnostics(runtime.GOOS, runtime.GOARCH, selectedExecTools(selected))
 
 	startedAt := time.Now()
+	wattVersion := options.Version
+	if wattVersion == "" {
+		wattVersion = "dev"
+	}
 	final := result.Result{
 		SchemaVersion: result.SchemaVersion,
 		Pipeline:      pipelineName,
 		Status:        "success",
 		Steps:         make([]result.Step, 0, len(selected.Steps)),
 		StartedAt:     startedAt.Format(time.RFC3339Nano),
-		WattVersion:   "dev",
+		WattVersion:   wattVersion,
 		Environment: result.Environment{
 			OS:             diagnostics.OS,
 			Arch:           diagnostics.Arch,

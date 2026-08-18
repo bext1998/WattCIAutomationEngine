@@ -15,6 +15,47 @@ import (
 	"github.com/bext1998/WattCIAutomationEngine/internal/result"
 )
 
+func TestRunUsesConfiguredVersion(t *testing.T) {
+	outcome := runVersionPipeline(t, "v1.2.3")
+
+	if outcome.Result.WattVersion != "v1.2.3" {
+		t.Fatalf("result watt_version = %q, want %q", outcome.Result.WattVersion, "v1.2.3")
+	}
+}
+
+func TestRunDefaultsVersionToDev(t *testing.T) {
+	outcome := runVersionPipeline(t, "")
+
+	if outcome.Result.WattVersion != "dev" {
+		t.Fatalf("result watt_version = %q, want %q", outcome.Result.WattVersion, "dev")
+	}
+}
+
+func runVersionPipeline(t *testing.T, version string) Outcome {
+	t.Helper()
+	repoRoot := t.TempDir()
+	pipelinePath := filepath.Join(repoRoot, "watt.yaml")
+	pipeline := fmt.Sprintf("version: 1\npipelines:\n  default:\n    steps:\n      - name: version\n        exec: '%s'\n        args: [\"-test.run=TestOrchestratorHelperProcess\"]\n", yamlQuote(os.Args[0]))
+	if err := os.WriteFile(pipelinePath, []byte(pipeline), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	outcome, err := Run(Options{
+		RepoRoot:     repoRoot,
+		PipelinePath: pipelinePath,
+		Version:      version,
+		Stdout:       io.Discard,
+		Stderr:       io.Discard,
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if outcome.Code != ExitSuccess {
+		t.Fatalf("exit code = %d, want %d", outcome.Code, ExitSuccess)
+	}
+	return outcome
+}
+
 func TestRunPwshShellStepWritesResult(t *testing.T) {
 	repoRoot := t.TempDir()
 	pipelinePath := filepath.Join(repoRoot, "watt.yaml")
