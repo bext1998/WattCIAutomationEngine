@@ -1,7 +1,7 @@
 # Authoring 模式：建立新的 pipeline 定義
 
 ## 適用情境
-Repo 根目錄還沒有 watt.yaml，且任務明確要求建立或修改它。不要在其他情境下主動建立 pipeline 定義。
+任務明確要求建立或修改 pipeline 定義，不論 repo 根目錄是否已經有 `watt.yaml`。不要在其他情境下主動建立或修改 pipeline 定義；僅因檔案存在也不代表可以執行它。
 
 ## Pipeline 資料模型（自成一份，不假設你能存取 Watt 原始碼或 spec.md）
 
@@ -30,7 +30,7 @@ pipelines:
 ## 流程
 1. 分析 repo：這個專案的 test／build／package 各自對應什麼指令？（例如 Node 專案可能是 npm test／npm run build；Go 專案是 go test ./...／go build）
 2. 依上面的資料模型草擬 watt.yaml。
-3. 只能跑 watt check 驗證語法（無副作用、不啟動任何 process）。絕對不能跑 watt run——那會真的執行 pipeline 裡的指令，Authoring 模式下這是越權。
+3. 只能跑 watt check 驗證語法（無副作用、不啟動任何 process）。`watt.yaml` 是可執行任意命令的定義，不是安全設定檔；絕對不能跑 watt run——那會真的執行 pipeline 裡的指令，Authoring 模式下這是越權。
 4. watt check 通過只代表語法合法，不代表這份 pipeline 已經可以拿來當正式驗證關卡。交給人類審核之前，不得讓任何自動化流程依賴這份 pipeline 的結果。
 
 ## 反例教訓：不要照抄範例文字裡的具體命名當硬性規則
