@@ -2,3 +2,4 @@
 *.exe
 /.watt/
 /docs/adr/
+/docs/assets/
