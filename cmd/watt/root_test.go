@@ -897,3 +897,61 @@ func TestRootCommandHelpExcludesCompletion(t *testing.T) {
 		t.Errorf("help output exposes completion command: %q", help)
 	}
 }
+
+func TestBareInvocation_PrintsUnicodeBrandBeforeHelp(t *testing.T) {
+	command := newRootCommand()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.SetOut(&stdout)
+	command.SetErr(&stderr)
+
+	if got, want := execute(command), EXIT_SUCCESS; got != want {
+		t.Fatalf("exit code = %d, want %d; stderr = %q", got, want, stderr.String())
+	}
+	output := stdout.String()
+	wantBrand := brandBlock(unicodeBanner, unicodeTagline, unicodeHint)
+	if !strings.HasPrefix(output, wantBrand) {
+		t.Errorf("stdout does not start with Unicode brand block: %q", output)
+	}
+	if !strings.Contains(output, "Usage:") {
+		t.Errorf("stdout = %q, want Usage", output)
+	}
+	if strings.Contains(output, "Local pipeline execution and verification engine") {
+		t.Errorf("stdout contains old Short description: %q", output)
+	}
+	if got := stderr.String(); got != "" {
+		t.Errorf("stderr = %q, want empty", got)
+	}
+}
+
+func TestHelpFlag_DoesNotShowBrand(t *testing.T) {
+	for _, arg := range []string{"--help", "-h"} {
+		t.Run(arg, func(t *testing.T) {
+			command := newRootCommand()
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			command.SetOut(&stdout)
+			command.SetErr(&stderr)
+			command.SetArgs([]string{arg})
+
+			if got, want := execute(command), EXIT_SUCCESS; got != want {
+				t.Fatalf("exit code = %d, want %d; stderr = %q", got, want, stderr.String())
+			}
+			output := stdout.String()
+			for _, brandText := range []string{unicodeBanner, unicodeTagline, unicodeHint} {
+				if strings.Contains(output, brandText) {
+					t.Errorf("stdout contains brand text %q: %q", brandText, output)
+				}
+			}
+			if !strings.Contains(output, "Local pipeline execution and verification engine") {
+				t.Errorf("stdout = %q, want old Short description", output)
+			}
+			if !strings.Contains(output, "Usage:") {
+				t.Errorf("stdout = %q, want Usage", output)
+			}
+			if got := stderr.String(); got != "" {
+				t.Errorf("stderr = %q, want empty", got)
+			}
+		})
+	}
+}

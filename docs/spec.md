@@ -1,8 +1,8 @@
 # Watt Specification — Phase 1 (MVP)
 
-**版本**：v1.5
-**狀態**：Review（Maze 已於 2026-08-08 確認 v1.3 內容；使用者已於 2026-08-17 確認 v1.4 修訂；使用者已於 2026-08-19 確認 v1.5 修訂）
-**日期**：2026-08-19
+**版本**：v1.6
+**狀態**：Review（Maze 已於 2026-08-08 確認 v1.3 內容；使用者已於 2026-08-17 確認 v1.4 修訂；使用者已於 2026-08-19 確認 v1.5 修訂；使用者已於 2026-08-20 確認 v1.6 修訂）
+**日期**：2026-08-20
 **適用對象**：實作 AI 代理（Codex / Claude Code / opencode / Cursor）、規格審查者
 **技術環境**：Go 1.24.x、static build、zero CGO、Windows-first（amd64）
 **前置文件**：[未提供] — Taylor spec 中的 gate 整合章節尚未撰寫，本文件不得反向依賴之
@@ -188,6 +188,7 @@ Taylor（未來）──────┘
 - **F-14**：`--output json` 旗標，於可組裝 result 的執行結束後將完整 result JSON 寫至 stdout（供 pipe 消費）。**啟用此旗標時，各 step 的即時輸出改導向呼叫端 stderr**（不再依 F-13 預設寫入 stdout），確保呼叫端 stdout 全程只承載最終唯一的 JSON，pipe 消費者可直接解析；若 invalid pipeline 等情況無 result 可組裝，錯誤訊息改寫至 stderr，stdout 不保證有 JSON。未啟用 `--output json` 時維持 F-13 預設行為：step 輸出即時透傳至 stdout/stderr。
 - **F-15**：`shell: bash` 支援（由使用者環境提供 Git Bash / WSL，Watt 不附帶）。
 - **F-16**：`watt run --dry-run` — 印出將執行的 step 序列與解析後的 command，不實際執行。
+- **F-25**：裸執行 `watt`（無旗標、無子指令、非 `--help`／`-h`）時，於既有 help 輸出之前印出品牌橫幅、標語與新手上路提示；環境判定支援 Unicode 輸出時顯示 Unicode 橫幅（ANSI Shadow 字型）與中英並列文字，判定不支援時橫幅、標語、提示三者一併降級為純 ASCII／純英文版本；`watt --version`、`watt --help`／`-h`、`watt run`、`watt check`、`--output json` 之既有輸出契約不受影響。
 
 ### 5.3 Could Have（Phase 1 不實作）
 
@@ -660,3 +661,4 @@ if strings.Contains(stdout, "FAIL") { ... }
 | v1.3 | 2026-08-08 | 依 v1.2 複審修訂：R-7 補齊 `cwd` 等 process 從未啟動之 `failed` step 的 `exit_code` 為 `null`，並明訂該情況不保證與 `failed` 狀態同時具備整數 exit code；Partial Result 欄位規則新增對應條目，並明訂 cancellation 確認失敗時該 step 本身仍標記 `cancelled`；A-7 由「待確認」改為「已確認」以消除與 R-9 FROZEN 數值的矛盾；新增 A-10 明確定義 cancellation 確認期限（5 秒），§7.3 不變式與 §4.2／AC-6 統一引用同一定義來源；R-8 補上遮罩最小長度門檻（8 字元）與短值誤傷風險之免責聲明；P-1 補齊 Job Object 建立時須設定 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`，使 P-3 的 close-on-kill 後備手段實際可用；R-6 補充說明本次草稿修訂不觸發 `schema_version` 遞增之理由 | Claude Code（依複審結果） |
 | v1.4 | 2026-08-17 | 依 Issue #13／PR #40 dogfooding 實作經驗與 Issue #41 規格審查（SR-001 Major、SR-002 Suggestion）修訂：§13 AC-1 驗收標準文字由具體檔名「skills.zip」改為中性措辭「pipeline 定義中指定的 artifact」，避免與示範情境的產物命名耦合；§4.1 情境1、§10.1 範例旁新增澄清敘述，明確 skills.zip／skills 相關命名僅為範例情境自選命名，非 Watt 對 Skill 概念的認知或依賴（§1.2／NG-8 邊界未受影響，僅文件措辭修訂，不影響 §7 FROZEN 契約） | Claude Code（依 Issue #41 規格審查結果，經使用者確認） |
 | v1.5 | 2026-08-19 | 使用者要求審計 spec.md 是否過度臃腫並回溯 2026-08-17 dogfooding 報告，追出 skills.zip 命名事故的結構性病根：「示範文字」與「契約文字」混雜、未明顯區隔，導致 Issue #13 實作時把 §4.1／§10.1 的範例命名當成 §13 AC-1 的契約值照抄。修訂：§4.1、§10.1 的範例值說明加上視覺標記「⚠️ 範例值，非契約要求」；§13 驗收標準前新增撰寫規則，明訂 AC 措辭不得引用示範情境之具體命名，避免同類事故再犯（僅文件措辭與撰寫規則修訂，不影響 §7 FROZEN 契約） | Claude Code（依使用者要求審計規格臃腫問題，會同 codex-watt 意見，經使用者確認） |
+| v1.6 | 2026-08-20 | 依 Issue #50（裸執行 `watt` 顯示品牌橫幅／標語／新手上路提示）新增 §5.2 F-25，記錄此新增 CLI 呈現層行為之契約邊界：只影響裸執行 `watt`，`--version`／`--help`／`-h`／`run`／`check`／`--output json` 既有輸出契約不受影響；不觸碰 §7 FROZEN。技術方案（Unicode／ASCII 判定邏輯、`WriteConsole` 寫入策略）經技術顧問（pi／whisk-badger）審查定案 | Claude Code（依 Issue #50 審查結果） |
