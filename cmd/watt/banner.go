@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"unsafe"
@@ -136,8 +135,15 @@ func selectBrandPlan(w io.Writer) brandPlan {
 
 // ---- 輸出 ----
 
+// consoleWriteOnce 包住單次 Win32 WriteConsole 呼叫，讓測試可以替換掉底層
+// syscall，模擬 short write／寫入失敗，不需要真正的 Windows console。
+var consoleWriteOnce = func(handle windows.Handle, buf *uint16, toWrite uint32, written *uint32) error {
+	return windows.WriteConsole(handle, buf, toWrite, written, nil)
+}
+
 // writeUTF16ToConsole 把 text 轉成 UTF-16 後用 windows.WriteConsole 寫入，
-// 繞過 console output code page 的限制。
+// 繞過 console output code page 的限制。WriteConsole 可能只寫出部分內容就
+// 回報成功（short write），因此用迴圈寫到全部完成為止，不能只呼叫一次。
 func writeUTF16ToConsole(f *os.File, text string) error {
 	utf16Text, err := windows.UTF16FromString(text)
 	if err != nil {
@@ -148,30 +154,46 @@ func writeUTF16ToConsole(f *os.File, text string) error {
 	if n := len(utf16Text); n > 0 && utf16Text[n-1] == 0 {
 		utf16Text = utf16Text[:n-1]
 	}
-	if len(utf16Text) == 0 {
-		return nil
-	}
 	handle := windows.Handle(f.Fd())
-	var written uint32
-	return windows.WriteConsole(handle, &utf16Text[0], uint32(len(utf16Text)), &written, nil)
+	for len(utf16Text) > 0 {
+		var written uint32
+		if err := consoleWriteOnce(handle, &utf16Text[0], uint32(len(utf16Text)), &written); err != nil {
+			return err
+		}
+		if written == 0 || written > uint32(len(utf16Text)) {
+			return io.ErrShortWrite
+		}
+		utf16Text = utf16Text[written:]
+	}
+	return nil
+}
+
+// writeBrandWithPlan 依 plan 把對應的品牌內容寫到 out。planUnicodeConsole
+// 情況下用 consoleWrite 寫入（正式呼叫傳 writeUTF16ToConsole；測試可以換成
+// 假函式，不需要真正的 Windows console）。
+func writeBrandWithPlan(out io.Writer, plan brandPlan, consoleWrite func(*os.File, string) error) error {
+	switch plan {
+	case planUnicodeConsole:
+		text := brandBlock(unicodeBanner, unicodeTagline, unicodeHint)
+		f, ok := out.(*os.File)
+		if !ok {
+			// selectBrandPlan 的邏輯保證 planUnicodeConsole 只會在 out 是
+			// *os.File 時被選到；這裡是防禦性後備，不應該實際發生。
+			_, err := io.WriteString(out, text)
+			return err
+		}
+		return consoleWrite(f, text)
+	case planASCIIConsole:
+		_, err := io.WriteString(out, brandBlock(asciiBanner, asciiTagline, asciiHint))
+		return err
+	default: // planUnicodeUTF8
+		_, err := io.WriteString(out, brandBlock(unicodeBanner, unicodeTagline, unicodeHint))
+		return err
+	}
 }
 
 // writeBrand 依 selectBrandPlan 的判斷結果，把品牌橫幅／標語／提示寫到 out。
-func writeBrand(out io.Writer) {
-	switch selectBrandPlan(out) {
-	case planUnicodeConsole:
-		text := brandBlock(unicodeBanner, unicodeTagline, unicodeHint)
-		if f, ok := out.(*os.File); ok {
-			if err := writeUTF16ToConsole(f, text); err == nil {
-				return
-			}
-			// WriteConsole 寫入失敗時，退回一般 UTF-8 bytes 寫入，至少不要
-			// 讓裸執行 watt 因為橫幅寫入失敗而整個中斷。
-		}
-		fmt.Fprint(out, text)
-	case planASCIIConsole:
-		fmt.Fprint(out, brandBlock(asciiBanner, asciiTagline, asciiHint))
-	default: // planUnicodeUTF8
-		fmt.Fprint(out, brandBlock(unicodeBanner, unicodeTagline, unicodeHint))
-	}
+// 錯誤會原樣回傳給呼叫者，不吞掉、不在部分寫入失敗後重播整段內容。
+func writeBrand(out io.Writer) error {
+	return writeBrandWithPlan(out, selectBrandPlan(out), writeUTF16ToConsole)
 }

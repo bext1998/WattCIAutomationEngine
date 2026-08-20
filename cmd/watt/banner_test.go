@@ -3,9 +3,13 @@ package main
 import (
 	"bytes"
 	"errors"
+	"io"
 	"os"
 	"strings"
 	"testing"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 var errFakeNotAConsole = errors.New("fake: not a console")
@@ -90,5 +94,137 @@ func TestBrandBlock_ContainsExpectedSections(t *testing.T) {
 	}
 	if !strings.Contains(block, unicodeHint) {
 		t.Fatal("missing hint")
+	}
+}
+
+func TestWriteBrandWithPlan_ASCIIConsole_WritesExactBlock(t *testing.T) {
+	var buf bytes.Buffer
+	err := writeBrandWithPlan(&buf, planASCIIConsole, func(*os.File, string) error {
+		t.Fatal("consoleWrite should not be called for planASCIIConsole")
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := brandBlock(asciiBanner, asciiTagline, asciiHint)
+	if got := buf.String(); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestWriteBrandWithPlan_UnicodeUTF8_WritesExactBlock(t *testing.T) {
+	var buf bytes.Buffer
+	err := writeBrandWithPlan(&buf, planUnicodeUTF8, func(*os.File, string) error {
+		t.Fatal("consoleWrite should not be called for planUnicodeUTF8")
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := brandBlock(unicodeBanner, unicodeTagline, unicodeHint)
+	if got := buf.String(); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestWriteBrandWithPlan_UnicodeConsole_PassesExactTextToConsoleWrite(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "watt-brand-test")
+	if err != nil {
+		t.Fatalf("CreateTemp: %v", err)
+	}
+	defer f.Close()
+
+	var gotFile *os.File
+	var gotText string
+	err = writeBrandWithPlan(f, planUnicodeConsole, func(w *os.File, text string) error {
+		gotFile = w
+		gotText = text
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotFile != f {
+		t.Error("consoleWrite did not receive the same *os.File")
+	}
+	want := brandBlock(unicodeBanner, unicodeTagline, unicodeHint)
+	if gotText != want {
+		t.Errorf("got %q, want %q", gotText, want)
+	}
+}
+
+func TestWriteBrandWithPlan_UnicodeConsole_PropagatesConsoleWriteError(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "watt-brand-test")
+	if err != nil {
+		t.Fatalf("CreateTemp: %v", err)
+	}
+	defer f.Close()
+
+	sentinel := errors.New("fake console write failure")
+	err = writeBrandWithPlan(f, planUnicodeConsole, func(*os.File, string) error {
+		return sentinel
+	})
+	if !errors.Is(err, sentinel) {
+		t.Errorf("got error %v, want %v", err, sentinel)
+	}
+}
+
+func TestWriteUTF16ToConsole_ShortWrite_WritesRemainder(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "watt-brand-test")
+	if err != nil {
+		t.Fatalf("CreateTemp: %v", err)
+	}
+	defer f.Close()
+
+	original := consoleWriteOnce
+	defer func() { consoleWriteOnce = original }()
+
+	var calls int
+	var gotChunks []string
+	consoleWriteOnce = func(handle windows.Handle, buf *uint16, toWrite uint32, written *uint32) error {
+		calls++
+		if calls == 1 {
+			// 第一次只假裝寫了一半。
+			*written = toWrite / 2
+		} else {
+			*written = toWrite
+		}
+		// 把這次實際回報寫入的 UTF-16 buffer 轉回字串記錄下來，方便比對。
+		chunk := unsafe.Slice(buf, *written)
+		gotChunks = append(gotChunks, windows.UTF16ToString(chunk))
+		return nil
+	}
+
+	text := "hello short write"
+	if err := writeUTF16ToConsole(f, text); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls < 2 {
+		t.Fatalf("expected at least 2 WriteConsole calls for a short write, got %d", calls)
+	}
+	joined := strings.Join(gotChunks, "")
+	if joined != text {
+		t.Errorf("reassembled written text = %q, want %q", joined, text)
+	}
+}
+
+func TestWriteUTF16ToConsole_ZeroWrite_ReturnsShortWriteError(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "watt-brand-test")
+	if err != nil {
+		t.Fatalf("CreateTemp: %v", err)
+	}
+	defer f.Close()
+
+	original := consoleWriteOnce
+	defer func() { consoleWriteOnce = original }()
+
+	consoleWriteOnce = func(handle windows.Handle, buf *uint16, toWrite uint32, written *uint32) error {
+		*written = 0
+		return nil
+	}
+
+	err = writeUTF16ToConsole(f, "hello")
+	if !errors.Is(err, io.ErrShortWrite) {
+		t.Errorf("got error %v, want io.ErrShortWrite", err)
 	}
 }

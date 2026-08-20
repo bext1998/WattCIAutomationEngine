@@ -87,7 +87,9 @@ func newRootCommand() *cobra.Command {
 		Short: "Local pipeline execution and verification engine",
 		Args:  usageArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			writeBrand(command.OutOrStdout())
+			if err := writeBrand(command.OutOrStdout()); err != nil {
+				return &exitError{code: EXIT_INTERNAL_ERROR, err: err}
+			}
 			command.Short = ""
 			return command.Help()
 		},
