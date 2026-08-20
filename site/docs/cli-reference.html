@@ -16,5 +16,5 @@ watt check --env
 watt run
 
 # 讓其他程式接收結果 JSON
-watt run verify --output json</code></pre></div><p>需要依結果做自動分流時，先判斷 process exit code；再讀 <code>result.json</code> 的 semantic fields。不要把人類可讀輸出或 diagnostic fields 當作 verdict。</p></main>
+watt run verify --output json</code></pre></div><p>若要讓其他程式自動判斷執行結果，先讀取 Watt 程序的結束碼（exit code），再讀取 <code>result.json</code> 中會影響成敗判定的欄位（semantic fields）。不要用畫面上的文字或只供除錯的欄位（diagnostic fields）判斷成功或失敗。</p></main>
 <nav class="toc" aria-label="本頁目錄"><p>本頁內容</p><a href="#general">一般指令</a><a href="#check">watt check</a><a href="#run">watt run</a><a href="#examples">建議流程</a></nav></div></body></html>
