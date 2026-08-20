@@ -8,8 +8,8 @@
 - 專案名稱：Watt
 - 目標工具：Claude Code；Codex 可參與規格審查、實作與 closeout 文件同步
 - 建立日期：2026-08-08
-- 目前狀態：`in-progress`；Issue #2、#3、#4、#5、#6、#7、#8、#9、#24（Phase 1 Must Have）、#29、#30、#31、#32、#10、#13、#41、#44、#46、#50 已完成；#37（P2／security）待排程；新開 #47／#48／#49（P3，documentation，文件站）：#48 blocked by #47（尚無決策記錄）
-- 最後同步：2026-08-20
+- 目前狀態：`in-progress`；Issue #2、#3、#4、#5、#6、#7、#8、#9、#24（Phase 1 Must Have）、#29、#30、#31、#32、#10、#13、#41、#44、#46、#47、#48、#49、#50 已完成；#37（P2／security）待排程；新開候選任務 #54（CLI 安裝精靈）、#56（Agent Skill 打包，P2）、#57（文件站分兩層讀者）
+- 最後同步：2026-08-21
 
 ## 文件
 
@@ -34,7 +34,7 @@
 - Category label convention：repo 現有 bug／documentation／enhancement／duplicate／good first issue／help wanted／invalid／question／wontfix；優先比對既有標籤
 - Default assignee policy：每次執行 spec-to-issues 時詢問（本人／不指派／逐項／指定帳號）
 - Allow label creation：待各次執行時於 Dry Run 取得確認
-- Current delivery：Issue #2、#3、#4、#5、#6、#7、#8、#9、#24（Phase 1 Must Have 全數）、#29、#30、#31、#32、#10、#13、#41、#44、#50 已關閉；PR #21、#22、#23、#25、#26、#27、#28、#33、#34、#35、#36、#38、#39、#40、#42、#43、#45、#46、#51 已合併；Parent Issue #1 仍開啟；Issue #37（P2／security，`pipeline.Validate()` 補同層 case-variant env key 檢查）待排程；新開 Issue #47／#48／#49（P3，documentation，文件站）：#48 blocked by #47（尚無決策記錄），工作目錄現有未 commit 的 `site/` 草稿
+- Current delivery：Issue #2、#3、#4、#5、#6、#7、#8、#9、#24（Phase 1 Must Have 全數）、#29、#30、#31、#32、#10、#13、#41、#44、#47、#48、#49、#50 已關閉；PR #21、#22、#23、#25、#26、#27、#28、#33、#34、#35、#36、#38、#39、#40、#42、#43、#45、#46、#51、#52、#53、#55 已合併；Parent Issue #1 仍開啟；Issue #37（P2／security，`pipeline.Validate()` 補同層 case-variant env key 檢查）待排程；官方網站與文件站已上線（https://bext1998.github.io/WattCIAutomationEngine/）；新開候選 Issue #54（CLI 安裝精靈）、#56（Agent Skill 打包，P2）、#57（文件站分兩層讀者）
 - CI／QA evidence：repository 現有 `.github/workflows/ci.yml`（push／PR／手動觸發，Windows runner 執行 go vet／go test／build／smoke test），已在 PR #25～#28、#33～#36 與 main push 各成功執行一次；仍沒有獨立 QA 報告
 
 ## 備注
