@@ -4,33 +4,30 @@
 
 ## 目前狀態
 
-`completed`（本次 session 範圍）。[Issue #10](https://github.com/bext1998/WattCIAutomationEngine/issues/10)（`--output json` 旗標，§5.2 F-14）已完成並關閉，[PR #39](https://github.com/bext1998/WattCIAutomationEngine/pull/39) 已合併（squash，commit `9678b17`）。實作由 pi（Orca 派工）依 Claude Code 事先確認好的設計完成：`run` 新增 `--output json` 旗標，啟用時 step 即時輸出改導向 stderr、執行結束後把最終 result JSON 寫到真正的 stdout（含 result.json 寫檔失敗仍盡力吐 stdout 的邊界情況），`internal/orchestrator.Outcome` 新增 `Assembled` 欄位判斷是否已組出 result，`internal/result` 抽出共用的 `Marshal()`，未變動 §7.2 FROZEN schema。Issue AC 指定的 `TestOutputJSON_StdoutCarriesOnlyFinalResult` 已新增並通過；Claude Code 獨立重跑過 `go vet ./...`、`go test ./...`（全 7 個套件）確認無回歸；CI `build-and-test` 已通過。Parent [Issue #1](https://github.com/bext1998/WattCIAutomationEngine/issues/1)（Phase 1 MVP 整體追蹤）仍開啟。
+`blocked`（部分前線）。最近完成並合併：Issue #50（裸執行 `watt` 顯示 ASCII 品牌橫幅／雙語標語／新手上路提示，PR #51，spec.md v1.5 → v1.6）。實作由 spatula-otter（codex）依逐字規格完成，技術方案（Unicode／ASCII 判定演算法、`WriteConsole` short write 處理）經技術顧問 whisk-badger（pi）兩輪審查（REVISE → 修正 → GO）；Claude Code 每輪都獨立重跑驗證，未只採信回報。此前完成：Issue #44（Release workflow + `watt_version` 硬編碼修正，PR #45）、Issue #46（新增 Watt Agent Skill）。文件站三個 Issue（#47/#48/#49，P3，documentation）仍未動工：工作目錄現有**未 commit** 的 `site/index.html`、`site/assets/`，疑似 #48（最小網站骨架）已起步，但 #48 明確依賴 #47（內容架構與單一事實來源決策），而 #47 目前沒有任何決策記錄——**#48 仍處於 blocked**，不建議在 #47 補齊前繼續往下堆 `site/`。獨立於文件站之外，Issue #37（P2／security，env key 大小寫檢查）無阻塞、隨時可開始。Parent [Issue #1](https://github.com/bext1998/WattCIAutomationEngine/issues/1)（Phase 1 MVP 整體追蹤）仍開啟。
 
 ## 下一個 Session 目標
 
-目前沒有阻塞中的 P0／P1 具體任務（Issue #1 是 Phase 1 整體追蹤，非單一可執行項目）。剩餘最高優先級為 P2，有兩個互不相依的候選，排序留待使用者判斷：
-
-- [Issue #37](https://github.com/bext1998/WattCIAutomationEngine/issues/37)（security，範圍小明確）：`pipeline.Validate()` 應比照 duplicate step name 慣例，擋下同一層大小寫重複的 env key（例如同時寫 `PATH:`／`Path:`）。
-- [Issue #13](https://github.com/bext1998/WattCIAutomationEngine/issues/13)（ci）：Dogfooding，讓 Watt 用自己的 `watt.yaml` 跑自身的 test/build/package。
+在「先做無阻塞的 #37」與「先補 #47 決策記錄解開 #48」之間，由使用者選擇下一個工作前線。
 
 ## 行動（最多 3 項）
 
-1. 跟使用者確認先做 #37 還是 #13（或其他方向）。
-2. 若選 #37：讀 Issue #37、`internal/pipeline/pipeline.go`（`Validate()`）與 `internal/env`（Issue #31／PR #36 對同層大小寫重複 key 的既有處理方式），補上驗證規則與回歸測試。
-3. 若選 #13：讀 Issue #13，規劃 `watt.yaml` 內容涵蓋自身 test/build/package，確認不牴觸 `docs/spec.md` §14 Phase 2 邊界（不擴大 Phase 1 範圍）。
+1. 跟使用者確認：先做 #37，還是先處理 #47。
+2. 若選 #37：讀 Issue #37、`internal/pipeline/pipeline.go`（`Validate()`）與 `internal/env`（Issue #31／PR #36 對同層大小寫重複 key 的既有處理方式），補驗證規則與回歸測試。
+3. 若選 #47：讀 Issue #47 全文與 #48／#49，產出內容架構決策記錄（`docs/spec.md`／`README.md`／網站三者的權威邊界），再回頭檢視 `site/` 現有草稿是否符合決策。
 
 ## 阻塞與待決策
 
-- 待決策：#37 vs #13 由使用者選擇下一個工作前線。
-- 已知測試缺口（延續自 PR #26／#27／#28，尚未補測）：`watt check --env` 未覆蓋「PATH 有 `powershell.exe`（5.1）但無 `pwsh.exe`（7）」情境（spec §4.2／§8.3 明確禁止 fallback，**仍未補**）；`TestMissingPwsh_NoFallbackTo51` 防不住寫死路徑呼叫 `powershell.exe` 的 fallback，`runner.shellArgs()` 對非 `pwsh`/`cmd` 值回傳空參數目前僅靠 `pipeline.Validate()` 擋住，`runner` 本身無防禦（Issue #7／PR #28 觀察，**仍未補**）。
-- PR #27（Issue #6）技術債：`orchestrator.WattVersion` 寫死 `"dev"`、`resolved_command` 空白 join 對含空白參數失真——已確認為低風險 diagnostic 顯示問題，可延後。
-- Issue #8 已知驗證缺口：AC-6 取消流程以 `context` cancellation 模擬 Ctrl+C（語意等價），未實際發送 OS 層級 Ctrl+C 訊號端到端驗證，CI 也未針對取消情境跑專門驗證。
-- Issue #9／PR #34 殘餘風險：pwsh 版本探測的 `WaitDelay` 修正保證探測呼叫本身會在期限內返回，但不會終止造成卡住的 wrapper 之 grandchild 行程本身，影響範圍小，暫不視為阻塞。
+- 待決策：#37 vs #47（解開 #48 阻塞）由使用者選擇下一個工作前線。
+- #48 blocked by #47（無決策記錄）；`site/` 未 commit 草稿用途待使用者確認去留。
+- 已知測試缺口（延續自 PR #26／#27／#28，尚未補測，近期無 PR 觸及）：`watt check --env` 未覆蓋「PATH 有 `powershell.exe`（5.1）但無 `pwsh.exe`（7）」情境；`runner.shellArgs()` 對非 `pwsh`/`cmd` 值目前僅靠 `pipeline.Validate()` 擋住，`runner` 本身無防禦（見 `REPO_MAP.md`「目前未知項目」）。
+- Issue #9／PR #34 殘餘風險：pwsh 版本探測的 `WaitDelay` 修正保證探測呼叫本身逾時返回，但不會終止卡住的 wrapper 之 grandchild 行程本身，影響範圍小，暫不視為阻塞。
+- Issue #50／PR #51 已知未驗證項目：ASCII 降級分支（真正 console＋raster／點陣字型）只靠單元測試以注入假資料驗證判定邏輯，未在真正的舊版點陣字型 console 環境跑過真實案例（Windows 無百分之百可靠的字型能力偵測 API，設計階段已承認此限制）。
 
 ## 權威連結
 
-- `docs\spec.md`（v1.3，Review）
+- `docs\spec.md`（v1.6，Review）
 - [Parent Issue #1](https://github.com/bext1998/WattCIAutomationEngine/issues/1)（追蹤全部 Sub-issue 進度，以 GitHub 為工作狀態權威）
-- [PR #39](https://github.com/bext1998/WattCIAutomationEngine/pull/39)（最近合併：`--output json` 旗標，closes #10）
-- [Issue #37](https://github.com/bext1998/WattCIAutomationEngine/issues/37)（候選前線，P2／security）
-- [Issue #13](https://github.com/bext1998/WattCIAutomationEngine/issues/13)（候選前線，P2／ci，Dogfooding）
+- [Issue #37](https://github.com/bext1998/WattCIAutomationEngine/issues/37)（候選前線，P2／security，無阻塞）
+- [Issue #47](https://github.com/bext1998/WattCIAutomationEngine/issues/47)（候選前線，P3，阻塞 #48）／[#48](https://github.com/bext1998/WattCIAutomationEngine/issues/48)（blocked）／[#49](https://github.com/bext1998/WattCIAutomationEngine/issues/49)（依賴 #47／#48）
+- [PR #51](https://github.com/bext1998/WattCIAutomationEngine/pull/51)（Issue #50，最近合併）、PR #45（Issue #44，Release workflow）、PR #46（Issue #46，Watt Agent Skill）
