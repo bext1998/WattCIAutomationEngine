@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>撰寫 watt.yaml — Watt 文件</title><link rel="icon" type="image/png" href="../assets/img/favicon-32.png"><link rel="stylesheet" href="../assets/site.css"><script src="../assets/site.js" defer></script></head>
+<body><header class="site-header"><a class="brand" href="../index.html" aria-label="Watt 首頁"><img src="../assets/img/watt-icon-inverse.png" width="28" height="28" alt=""><img class="brand-wordmark" src="../assets/img/watt-wordmark-reverse.png" width="72" height="21" alt="Watt"></a><nav class="header-nav" aria-label="主要導覽"><a href="getting-started.html">文件</a><a href="https://github.com/bext1998/WattCIAutomationEngine">GitHub</a><a class="button button-small" href="https://github.com/bext1998/WattCIAutomationEngine/releases">下載 watt.exe</a></nav></header>
+<div class="docs-shell"><aside class="docs-sidebar" aria-label="文件導覽"><ul><li><a class="sidebar-home" href="../index.html">首頁</a></li></ul><h2>開始使用</h2><ul><li><a href="getting-started.html">快速開始</a></li></ul><h2>使用指南</h2><ul><li><a aria-current="page" href="pipeline-authoring.html">撰寫 watt.yaml</a></li><li><a href="cli-reference.html">CLI 指令參考</a></li><li><a href="troubleshooting.html">排錯指引</a></li></ul></aside>
+<main class="docs-content"><p class="eyebrow">使用指南</p><h1>撰寫 watt.yaml</h1><p class="lead">用一份簡單、明確的 YAML 定義要依序執行的 pipeline 與 steps。</p><aside class="guide-notice"><strong>使用指南，非契約規格</strong><span>本頁為便利操作而寫的摘要；欄位、預設值與驗證規則的唯一權威是 <a href="https://github.com/bext1998/WattCIAutomationEngine/blob/main/docs/spec.md">docs/spec.md</a>。</span></aside>
+<h2 id="shape">基本結構</h2><div class="code-block"><div class="code-block-header"><span>watt.yaml</span><button class="copy-button" data-copy type="button">複製</button></div><pre><code>version: 1
+
+env:
+  CI: "true"
+
+pipelines:
+  default:
+    steps:
+      - name: Test
+        exec: go
+        args: ["test", "./..."]
+
+      - name: Build
+        exec: go
+        args: ["build", "./..."]</code></pre></div><p>根層的 <code>version</code> 目前固定為 <code>1</code>。<code>pipelines</code> 至少需要一組具名 pipeline；沒有在 <code>watt run</code> 指定名稱時，Watt 會執行名為 <code>default</code> 的 pipeline。</p>
+<h2 id="step-modes">選擇 step 模式</h2><p>每個 step 只能擇一使用 <code>exec</code> 或 <code>run</code>。前者直接啟動可執行檔；後者交由指定 shell 執行腳本。</p><div class="table-wrap"><table class="field-table"><thead><tr><th>模式</th><th>適用情況</th><th>可搭配欄位</th></tr></thead><tbody><tr><td>exec</td><td>已有明確 command 與參數。</td><td><code>args</code>、<code>cwd</code>、<code>env</code></td></tr><tr><td>run</td><td>需要 shell script、管線或多行指令。</td><td><code>shell</code>、<code>cwd</code>、<code>env</code></td></tr></tbody></table></div><div class="code-block"><div class="code-block-header"><span>watt.yaml</span><button class="copy-button" data-copy type="button">複製</button></div><pre><code>version: 1
+
+pipelines:
+  default:
+    steps:
+      - name: Direct command
+        exec: go
+        args: ["test", "./..."]
+
+      - name: PowerShell script
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist
+          Copy-Item README.md dist\</code></pre></div><p><code>run</code> 未指定 <code>shell</code> 時預設為 <code>pwsh</code>。Phase 1 支援 <code>pwsh</code> 與 <code>cmd</code>；<code>bash</code> 尚未支援。Watt 不會把 <code>pwsh</code> 靜默改用 Windows PowerShell 5.1。</p>
+<h2 id="context">設定工作目錄與環境變數</h2><p><code>cwd</code> 相對於專案根目錄；未指定時就是專案根目錄。環境變數會由 host、pipeline、step 依序合併，step 值優先。</p><div class="code-block"><div class="code-block-header"><span>watt.yaml</span><button class="copy-button" data-copy type="button">複製</button></div><pre><code>version: 1
+
+env:
+  CONFIGURATION: Release
+
+pipelines:
+  default:
+    steps:
+      - name: Build app
+        exec: dotnet
+        args: ["build", "-c", "Release"]
+        cwd: src\App
+        env:
+          CI: "true"</code></pre></div><div class="callout">不要把 secrets 寫進 result 的預期輸出。environment 診斷區塊只記錄變數名稱，不記錄變數值。Watt 也會依規格遮罩 resolved_command 與 output_tail 中符合條件的已知環境值，但這不是 secret store；pipeline 不應主動輸出 secrets。完整邊界請見 <a href="https://github.com/bext1998/WattCIAutomationEngine/blob/main/docs/spec.md">docs/spec.md</a> R-4／R-8。</div>
+<h2 id="validate">驗證你的定義</h2><p>每次修改 <code>watt.yaml</code> 後先執行：</p><div class="code-block"><div class="code-block-header"><span>PowerShell</span><button class="copy-button" data-copy type="button">複製</button></div><pre><code>watt check
+watt check --env</code></pre></div><p>未知欄位、重複 step 名稱、空 pipeline、同時使用 <code>exec</code> 與 <code>run</code> 都會在靜態驗證階段失敗。</p></main>
+<nav class="toc" aria-label="本頁目錄"><p>本頁內容</p><a href="#shape">基本結構</a><a href="#step-modes">Step 模式</a><a href="#context">cwd 與 env</a><a href="#validate">驗證定義</a></nav></div></body></html>

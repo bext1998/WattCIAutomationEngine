@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>CLI 指令參考 — Watt 文件</title><link rel="icon" type="image/png" href="../assets/img/favicon-32.png"><link rel="stylesheet" href="../assets/site.css"><script src="../assets/site.js" defer></script></head>
+<body><header class="site-header"><a class="brand" href="../index.html" aria-label="Watt 首頁"><img src="../assets/img/watt-icon-inverse.png" width="28" height="28" alt=""><img class="brand-wordmark" src="../assets/img/watt-wordmark-reverse.png" width="72" height="21" alt="Watt"></a><nav class="header-nav" aria-label="主要導覽"><a href="getting-started.html">文件</a><a href="https://github.com/bext1998/WattCIAutomationEngine">GitHub</a><a class="button button-small" href="https://github.com/bext1998/WattCIAutomationEngine/releases">下載 watt.exe</a></nav></header>
+<div class="docs-shell"><aside class="docs-sidebar" aria-label="文件導覽"><ul><li><a class="sidebar-home" href="../index.html">首頁</a></li></ul><h2>開始使用</h2><ul><li><a href="getting-started.html">快速開始</a></li></ul><h2>使用指南</h2><ul><li><a href="pipeline-authoring.html">撰寫 watt.yaml</a></li><li><a aria-current="page" href="cli-reference.html">CLI 指令參考</a></li><li><a href="troubleshooting.html">排錯指引</a></li></ul></aside>
+<main class="docs-content"><p class="eyebrow">參考</p><h1>CLI 指令參考</h1><p class="lead">Watt 的 CLI 保持簡短：檢查定義、檢查執行環境、執行一個 pipeline。</p><aside class="guide-notice"><strong>使用指南，非契約規格</strong><span>本頁是 CLI 使用摘要；正式行為與 exit code 契約請以 <a href="https://github.com/bext1998/WattCIAutomationEngine/blob/main/docs/spec.md">docs/spec.md</a> 為準。</span></aside>
+<h2 id="general">一般指令</h2><div class="code-block"><div class="code-block-header"><span>PowerShell</span><button class="copy-button" data-copy type="button">複製</button></div><pre><code>watt --version
+watt --help</code></pre></div><p>不帶子指令直接輸入 <code>watt</code>，會顯示品牌橫幅與使用說明。<code>--version</code> 輸出目前版本，<code>--help</code> 列出所有指令與旗標。</p>
+<h2 id="check">watt check</h2><div class="code-block"><div class="code-block-header"><span>Usage</span><button class="copy-button" data-copy type="button">複製</button></div><pre><code>watt check [--env]</code></pre></div><p>從目前工作目錄載入 <code>watt.yaml</code>，執行靜態驗證。它不會執行任何 step，也不會產生 <code>.watt/result.json</code>。</p><h3>--env</h3><p>在靜態驗證通過後，額外確認所有 pipeline 與 step 需要的 command、<code>pwsh</code> 或 <code>cmd</code> 能否從 <code>PATH</code> 解析。仍不會啟動 process。</p>
+<h2 id="run">watt run</h2><div class="code-block"><div class="code-block-header"><span>Usage</span><button class="copy-button" data-copy type="button">複製</button></div><pre><code>watt run [pipeline] [--output json]</code></pre></div><p>執行目前工作目錄 <code>watt.yaml</code> 中的單一 pipeline。未提供名稱時執行 <code>default</code>；指定名稱時，該名稱必須存在。</p><h3>--output json</h3><p>把最終 result JSON 輸出至標準輸出。為避免混入 JSON，step 的標準輸出會改寫到標準錯誤。無論是否使用此旗標，符合條件的 <code>watt run</code> 都會盡力把結果寫入 <code>.watt/result.json</code>。</p><div class="code-block"><div class="code-block-header"><span>PowerShell</span><button class="copy-button" data-copy type="button">複製</button></div><pre><code>watt run
+watt run package
+watt run verify --output json</code></pre></div>
+<h2 id="examples">建議使用流程</h2><div class="code-block"><div class="code-block-header"><span>PowerShell</span><button class="copy-button" data-copy type="button">複製</button></div><pre><code># 修改 watt.yaml 後
+watt check --env
+
+# 執行預設 pipeline
+watt run
+
+# 讓其他程式接收結果 JSON
+watt run verify --output json</code></pre></div><p>需要依結果做自動分流時，先判斷 process exit code；再讀 <code>result.json</code> 的 semantic fields。不要把人類可讀輸出或 diagnostic fields 當作 verdict。</p></main>
+<nav class="toc" aria-label="本頁目錄"><p>本頁內容</p><a href="#general">一般指令</a><a href="#check">watt check</a><a href="#run">watt run</a><a href="#examples">建議流程</a></nav></div></body></html>
