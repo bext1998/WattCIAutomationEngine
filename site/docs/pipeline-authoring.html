@@ -45,7 +45,7 @@ pipelines:
         args: ["build", "-c", "Release"]
         cwd: src\App
         env:
-          CI: "true"</code></pre></div><div class="callout">不要讓指令主動印出密碼、存取權杖（token）或其他敏感資料。結果檔的 <code>environment</code> 區塊只列出環境變數名稱，不含值；Watt 也會遮住 <code>resolved_command</code> 與 <code>output_tail</code> 中符合規則的已知環境值，但無法保證識別所有秘密——Watt 不是保管秘密的工具。完整邊界請見 <a href="https://github.com/bext1998/WattCIAutomationEngine/blob/main/docs/spec.md">docs/spec.md</a> R-4／R-8。</div>
+          CI: "true"</code></pre></div><div class="callout">不要讓指令主動印出密碼、存取權杖（token）或其他敏感資料。結果檔的 <code>environment</code> 區塊不記錄環境變數的值，只列出變數名稱等安全診斷資訊；Watt 也會遮住 <code>resolved_command</code> 與 <code>output_tail</code> 中符合規則的已知環境值，但無法保證識別所有秘密——Watt 不是保管秘密的工具。完整邊界請見 <a href="https://github.com/bext1998/WattCIAutomationEngine/blob/main/docs/spec.md">docs/spec.md</a> R-4／R-8。</div>
 <h2 id="validate">驗證你的定義</h2><p>每次修改 <code>watt.yaml</code> 後先執行：</p><div class="code-block"><div class="code-block-header"><span>PowerShell</span><button class="copy-button" data-copy type="button">複製</button></div><pre><code>watt check
 watt check --env</code></pre></div><p>未知欄位、重複 step 名稱、空 pipeline、同時使用 <code>exec</code> 與 <code>run</code> 都會在靜態驗證階段失敗。</p></main>
 <nav class="toc" aria-label="本頁目錄"><p>本頁內容</p><a href="#shape">基本結構</a><a href="#step-modes">Step 模式</a><a href="#context">cwd 與 env</a><a href="#validate">驗證定義</a></nav></div></body></html>
