@@ -56,4 +56,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
-        run: gh release create $env:RELEASE_TAG .\dist\watt.exe --title $env:RELEASE_TAG --generate-notes
+        run: |
+          # semver 慣例：tag 帶有 -prerelease 識別碼（例如 v0.0.2-snapshot、
+          # v1.0.0-rc1）才標成 pre-release；沒有連字號的正式版 tag（例如
+          # v1.0.0）維持一般 release，不需要每次手動指定。
+          $releaseArgs = @('release', 'create', $env:RELEASE_TAG, '.\dist\watt.exe', '--title', $env:RELEASE_TAG, '--generate-notes')
+          if ($env:RELEASE_TAG -match '-') {
+            $releaseArgs += '--prerelease'
+          }
+          gh @releaseArgs
