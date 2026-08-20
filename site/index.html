@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Watt — 本機 Pipeline 執行與驗證</title>
+  <meta name="description" content="Watt 是 Windows-first、local-first 的確定性 Pipeline 執行與驗證引擎。">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/img/favicon-32.png">
+  <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/site.css">
+  <script src="assets/site.js" defer></script>
+</head>
+<body class="home-page">
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="Watt 首頁"><img src="assets/img/watt-icon-inverse.png" width="28" height="28" alt=""><img class="brand-wordmark" src="assets/img/watt-wordmark-reverse.png" width="72" height="21" alt="Watt"></a>
+    <nav class="header-nav" aria-label="主要導覽"><a href="docs/getting-started.html">文件</a><a href="https://github.com/bext1998/WattCIAutomationEngine">GitHub</a><a class="button button-small" href="https://github.com/bext1998/WattCIAutomationEngine/releases">下載 watt.exe</a></nav>
+  </header>
+  <main>
+    <section class="home-hero">
+      <div class="eyebrow">WINDOWS-FIRST · LOCAL-FIRST</div>
+      <h1>讓本機驗證<br><span>有明確結果。</span></h1>
+      <p>Watt 依序執行你的 test、build 與 package pipeline，並輸出機器可解析的結果。它只專注在執行與驗證，不替你的專案發明另一套流程。</p>
+      <div class="hero-actions"><a class="button" href="docs/getting-started.html">快速開始</a><a class="text-link" href="https://github.com/bext1998/WattCIAutomationEngine/releases">前往 Releases <span aria-hidden="true">↗</span></a></div>
+    </section>
+    <section class="terminal-showcase" aria-labelledby="terminal-title">
+      <div class="terminal-heading"><div><p class="eyebrow">FIRST RUN</p><h2 id="terminal-title">從檢查到執行，只有兩步。</h2></div><a class="text-link" href="docs/cli-reference.html">查看 CLI 指令 <span aria-hidden="true">↗</span></a></div>
+      <div class="terminal" data-terminal aria-label="Watt CLI 操作示意動畫"><pre><code data-terminal-output></code><span class="terminal-cursor" aria-hidden="true"></span></pre><template>PS C:\project&gt; watt check --env
+Environment check passed.
+
+PS C:\project&gt; watt run
+✓ Test
+✓ Build
+
+Pipeline "default" completed successfully.
+Result written to .watt\result.json</template></div>
+      <p class="terminal-caption">介面示意動畫，其中狀態文字不代表 Watt 實際 CLI stdout；網站不會呼叫你的電腦或執行任何指令。</p>
+    </section>
+    <section class="principles" aria-labelledby="principles-title"><div class="section-intro"><p class="eyebrow">WHAT WATT GUARANTEES</p><h2 id="principles-title">小而明確的執行邊界。</h2></div><div class="principle-grid"><article><h3>依序執行</h3><p>Step 按 pipeline 定義的順序執行；失敗時立即停止，讓結果容易判讀。</p></article><article><h3>本機優先</h3><p>Watt 本身是單一 <code>watt.exe</code>，不需要 Node.js、Python 或額外 runtime；pipeline 執行的工具仍由專案環境提供。</p></article><article><h3>可供機器使用</h3><p>通過載入與靜態驗證的 <code>watt run</code> 會盡力寫出 JSON result，並用固定 exit code 區分結果類型。</p></article></div></section>
+    <section class="home-docs" aria-labelledby="docs-title"><div class="section-intro"><p class="eyebrow">DOCUMENTATION</p><h2 id="docs-title">從第一個 pipeline 開始。</h2></div><div class="docs-grid"><a href="docs/getting-started.html"><span>01</span><strong>快速開始</strong><small>安裝、建立第一份 watt.yaml、執行檢查。</small></a><a href="docs/pipeline-authoring.html"><span>02</span><strong>撰寫 Pipeline</strong><small>了解 exec、run、cwd 與 env 的基本用法。</small></a><a href="docs/cli-reference.html"><span>03</span><strong>CLI 指令參考</strong><small>check、run 和可用旗標的行為。</small></a><a href="docs/troubleshooting.html"><span>04</span><strong>排錯指引</strong><small>常見錯誤、exit code 與下一步。</small></a></div></section>
+  </main>
+  <footer class="site-footer"><span>Watt · MIT License</span><a href="https://github.com/bext1998/WattCIAutomationEngine/blob/main/docs/spec.md">技術契約規格（spec.md）↗</a></footer>
+</body>
+</html>
