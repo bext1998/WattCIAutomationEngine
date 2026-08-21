@@ -27,11 +27,19 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: .\scripts\build.ps1 -Version $env:RELEASE_TAG
 
-      - name: Upload watt.exe
+      - name: Create watt.exe SHA-256 checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash -LiteralPath .\dist\watt.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText('.\dist\watt.exe.sha256', "$hash  watt.exe`n", [Text.Encoding]::ASCII)
+
+      - name: Upload release assets
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: watt-exe
-          path: dist/watt.exe
+          name: watt-release-assets
+          path: |
+            dist/watt.exe
+            dist/watt.exe.sha256
           if-no-files-found: error
 
   release:
@@ -45,10 +53,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Download watt.exe
+      - name: Download release assets
         uses: actions/download-artifact@v8.0.1
         with:
-          name: watt-exe
+          name: watt-release-assets
           path: dist
 
       - name: Create GitHub Release
@@ -60,7 +68,7 @@ jobs:
           # semver 慣例：tag 帶有 -prerelease 識別碼（例如 v0.0.2-snapshot、
           # v1.0.0-rc1）才標成 pre-release；沒有連字號的正式版 tag（例如
           # v1.0.0）維持一般 release，不需要每次手動指定。
-          $releaseArgs = @('release', 'create', $env:RELEASE_TAG, '.\dist\watt.exe', '--title', $env:RELEASE_TAG, '--generate-notes')
+          $releaseArgs = @('release', 'create', $env:RELEASE_TAG, '.\dist\watt.exe', '.\dist\watt.exe.sha256', '--title', $env:RELEASE_TAG, '--generate-notes')
           if ($env:RELEASE_TAG -match '-') {
             $releaseArgs += '--prerelease'
           }
