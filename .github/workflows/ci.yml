@@ -42,6 +42,18 @@ jobs:
           if ($PSVersionTable.PSVersion.Major -lt 7) { throw "Expected PowerShell 7+, got $($PSVersionTable.PSVersion)" }
           .\tests\install.tests.ps1
 
+      - name: Agent Skill package tests (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          if ($PSVersionTable.PSVersion.Major -ne 5) { throw "Expected Windows PowerShell 5.1, got $($PSVersionTable.PSVersion)" }
+          .\tests\package-agent-skill.tests.ps1
+
+      - name: Agent Skill package tests (PowerShell 7+)
+        shell: pwsh
+        run: |
+          if ($PSVersionTable.PSVersion.Major -lt 7) { throw "Expected PowerShell 7+, got $($PSVersionTable.PSVersion)" }
+          .\tests\package-agent-skill.tests.ps1
+
       - name: Build watt.exe
         shell: pwsh
         run: .\scripts\build.ps1

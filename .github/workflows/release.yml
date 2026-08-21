@@ -33,6 +33,10 @@ jobs:
           $hash = (Get-FileHash -LiteralPath .\dist\watt.exe -Algorithm SHA256).Hash.ToLowerInvariant()
           [IO.File]::WriteAllText('.\dist\watt.exe.sha256', "$hash  watt.exe`n", [Text.Encoding]::ASCII)
 
+      - name: Package and verify Agent Skill
+        shell: pwsh
+        run: .\scripts\package-agent-skill.ps1
+
       - name: Upload release assets
         uses: actions/upload-artifact@v7.0.1
         with:
@@ -40,6 +44,8 @@ jobs:
           path: |
             dist/watt.exe
             dist/watt.exe.sha256
+            dist/watt-agent-skill.zip
+            dist/watt-agent-skill.zip.sha256
           if-no-files-found: error
 
   release:
@@ -68,7 +74,7 @@ jobs:
           # semver 慣例：tag 帶有 -prerelease 識別碼（例如 v0.0.2-snapshot、
           # v1.0.0-rc1）才標成 pre-release；沒有連字號的正式版 tag（例如
           # v1.0.0）維持一般 release，不需要每次手動指定。
-          $releaseArgs = @('release', 'create', $env:RELEASE_TAG, '.\dist\watt.exe', '.\dist\watt.exe.sha256', '--title', $env:RELEASE_TAG, '--generate-notes')
+          $releaseArgs = @('release', 'create', $env:RELEASE_TAG, '.\dist\watt.exe', '.\dist\watt.exe.sha256', '.\dist\watt-agent-skill.zip', '.\dist\watt-agent-skill.zip.sha256', '--title', $env:RELEASE_TAG, '--generate-notes')
           if ($env:RELEASE_TAG -match '-') {
             $releaseArgs += '--prerelease'
           }
