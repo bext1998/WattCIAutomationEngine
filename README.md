@@ -31,7 +31,7 @@ Watt 不提供 sandbox、filesystem isolation、secret store、remote runner 或
 irm https://raw.githubusercontent.com/bext1998/WattCIAutomationEngine/main/install.ps1 | iex
 ```
 
-安裝器只從官方 Releases 清單選取第一個符合規則的 snapshot 預發布版；它會先下載 `watt.exe` 與 `watt.exe.sha256` 到暫存目錄、驗證 SHA-256 後才替換正式檔案。它不需要系統管理員權限、不會修改 Machine PATH，也不會解除 Windows 對下載檔的封鎖。安裝完成後，其他已開啟的終端請重新開啟，再執行：
+安裝器只從官方 Releases 清單選取第一個符合規則的 snapshot 預發布版；它會先下載 `watt.exe` 與 `watt.exe.sha256` 到暫存目錄、驗證 SHA-256 後才替換正式檔案。它不需要系統管理員權限、不會修改 Machine PATH，也不會呼叫 `Unblock-File`，或主動移除／繞過 Windows 已附加的安全識別資訊。安裝完成後，其他已開啟的終端請重新開啟，再執行：
 
 ```powershell
 watt --version
