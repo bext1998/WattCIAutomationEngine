@@ -53,6 +53,28 @@ try {
     }
 
     Write-Host 'PASS agent skill package structure, content, and checksum'
+
+    $unexpectedSourceDirectory = Join-Path $tempDirectory 'unexpected-source'
+    $unexpectedOutputDirectory = Join-Path $tempDirectory 'unexpected-dist'
+    Copy-Item -LiteralPath (Join-Path $repositoryRoot 'skills\watt') -Destination $unexpectedSourceDirectory -Recurse
+    [IO.File]::WriteAllText((Join-Path $unexpectedSourceDirectory 'references\deployment.md'), 'unexpected source file')
+
+    try {
+        & $packageScript -SourceDirectory $unexpectedSourceDirectory -OutputDirectory $unexpectedOutputDirectory | Out-Null
+        throw 'Packaging unexpectedly succeeded with an unknown source file.'
+    }
+    catch {
+        if ($_.Exception.Message -notlike '*unexpected source file*') {
+            throw
+        }
+    }
+    if (Test-Path -LiteralPath (Join-Path $unexpectedOutputDirectory 'watt-agent-skill.zip') -PathType Leaf) {
+        throw 'Packaging an unexpected source file produced a release ZIP.'
+    }
+    if (Test-Path -LiteralPath (Join-Path $unexpectedOutputDirectory 'watt-agent-skill.zip.sha256') -PathType Leaf) {
+        throw 'Packaging an unexpected source file produced a release checksum.'
+    }
+    Write-Host 'PASS agent skill package rejects unexpected source files'
 }
 finally {
     Remove-Item -LiteralPath $tempDirectory -Force -Recurse -ErrorAction SilentlyContinue

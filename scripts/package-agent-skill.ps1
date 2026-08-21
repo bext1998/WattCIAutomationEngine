@@ -45,10 +45,17 @@ if (-not (Test-Path -LiteralPath $resolvedSourceDirectory -PathType Container)) 
     throw "Agent Skill source directory does not exist: $resolvedSourceDirectory"
 }
 
-foreach ($relativePath in $expectedFiles) {
-    if (-not (Test-Path -LiteralPath (Join-Path $resolvedSourceDirectory $relativePath) -PathType Leaf)) {
-        throw "Agent Skill source is missing required file: $relativePath"
-    }
+$actualSourceFiles = @(Get-ChildItem -LiteralPath $resolvedSourceDirectory -File -Recurse | ForEach-Object {
+    Get-NormalizedRelativePath -BasePath $resolvedSourceDirectory -Path $_.FullName
+} | Sort-Object)
+$expectedSourceFiles = @($expectedFiles | Sort-Object)
+$missingSourceFiles = @($expectedSourceFiles | Where-Object { $actualSourceFiles -notcontains $_ })
+$unexpectedSourceFiles = @($actualSourceFiles | Where-Object { $expectedSourceFiles -notcontains $_ })
+if ($missingSourceFiles.Count -gt 0) {
+    throw "Agent Skill source is missing required file(s): $($missingSourceFiles -join ', ')"
+}
+if ($unexpectedSourceFiles.Count -gt 0) {
+    throw "Agent Skill source has unexpected source file(s): $($unexpectedSourceFiles -join ', ')"
 }
 
 $stagingDirectory = Join-Path ([IO.Path]::GetTempPath()) ('watt-agent-skill-stage-' + [Guid]::NewGuid().ToString('N'))
