@@ -46,11 +46,12 @@ function Test-Case {
     }
 }
 
-Test-Case 'selects the first eligible snapshot prerelease in API order' {
+Test-Case 'selects the newest eligible snapshot prerelease regardless of API order' {
     $releases = @(
+        [pscustomobject]@{ draft = $false; prerelease = $true; tag_name = 'v0.0.2-snapshot'; assets = @() },
         [pscustomobject]@{ draft = $false; prerelease = $false; tag_name = 'v9.0.0'; assets = @() },
-        [pscustomobject]@{ draft = $true; prerelease = $true; tag_name = 'v8.0.0-snapshot'; assets = @() },
         [pscustomobject]@{ draft = $false; prerelease = $true; tag_name = 'v0.0.10-snapshot'; assets = @() },
+        [pscustomobject]@{ draft = $true; prerelease = $true; tag_name = 'v8.0.0-snapshot'; assets = @() },
         [pscustomobject]@{ draft = $false; prerelease = $true; tag_name = 'v0.0.9-snapshot'; assets = @() }
     )
 
@@ -103,6 +104,10 @@ Test-Case 'adds the install directory once while preserving existing User PATH e
     $existing = Add-WattPathEntry -PathValue 'C:\TOOLS;C:\Users\Alice\AppData\Local\Programs\WATT\\;C:\Other' -Entry 'C:\Users\Alice\AppData\Local\Programs\Watt'
     Assert-Equal $existing.Value 'C:\TOOLS;C:\Users\Alice\AppData\Local\Programs\WATT\\;C:\Other' 'Existing User PATH entries must not be rewritten'
     Assert-True (-not $existing.Changed) 'Case and trailing slash variants must be idempotent'
+}
+
+Test-Case 'rejects a User PATH that is too long before writing it' {
+    Assert-Throws { Assert-WattUserPathLength -PathValue ('x' * 2049) } 'User PATH is too long to safely append Watt; add the install directory manually.' 'User PATH length validation'
 }
 
 Test-Case 'requires both official release assets' {

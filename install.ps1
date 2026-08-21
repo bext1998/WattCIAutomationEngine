@@ -40,15 +40,22 @@ function Compare-WattSnapshotVersion {
 function Select-WattSnapshotRelease {
     param([Parameter(Mandatory = $true)][object[]]$Releases)
 
+    $newestRelease = $null
     foreach ($release in $Releases) {
         if ($null -eq $release) { continue }
         if ($release.draft -eq $true) { continue }
         if ($release.prerelease -ne $true) { continue }
         if ([string]$release.tag_name -notmatch $script:WattSnapshotTagPattern) { continue }
-        return $release
+
+        if ($null -eq $newestRelease -or (Compare-WattSnapshotVersion -Left $release.tag_name -Right $newestRelease.tag_name) -gt 0) {
+            $newestRelease = $release
+        }
     }
 
-    throw 'No snapshot prerelease is available from the official Watt GitHub Releases list.'
+    if ($null -eq $newestRelease) {
+        throw 'No snapshot prerelease is available from the official Watt GitHub Releases list.'
+    }
+    return $newestRelease
 }
 
 function Get-WattReleaseAssets {
@@ -163,12 +170,21 @@ function Add-WattPathEntry {
     return [pscustomobject]@{ Value = "$PathValue;$Entry"; Changed = $true }
 }
 
+function Assert-WattUserPathLength {
+    param([Parameter(Mandatory = $true)][string]$PathValue)
+
+    if ($PathValue.Length -gt 2048) {
+        throw 'User PATH is too long to safely append Watt; add the install directory manually.'
+    }
+}
+
 function Ensure-WattUserPath {
     param([Parameter(Mandatory = $true)][string]$InstallDirectory)
 
     $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
     $userPathResult = Add-WattPathEntry -PathValue $userPath -Entry $InstallDirectory
     if ($userPathResult.Changed) {
+        Assert-WattUserPathLength -PathValue $userPathResult.Value
         try {
             [Environment]::SetEnvironmentVariable('Path', $userPathResult.Value, 'User')
         }
